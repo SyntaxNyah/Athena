@@ -100,6 +100,8 @@ func TestAreaRenameRejections(t *testing.T) {
 		want string
 	}{
 		{"empty", []string{"   "}, "Give the area a name"},
+		{"dot", []string{"."}, `cannot be "." or ".."`},
+		{"dotdot", []string{".."}, `cannot be "." or ".."`},
 		{"too long", []string{strings.Repeat("x", maxAreaNameLen+1)}, "the limit is"},
 		{"packet separator", []string{"Court#room"}, "cannot contain"},
 		{"control character", []string{"Court\troom"}, "control characters"},

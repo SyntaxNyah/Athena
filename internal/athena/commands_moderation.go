@@ -416,9 +416,19 @@ func cmdLogin(client *Client, args []string, _ string) {
 		client.SendServerMessage("You are already logged in.")
 		return
 	}
+	// bcrypt's own cost already slows down a single guess, but with no limit
+	// at all a raider running many parallel connections against one IPID has
+	// unbounded attempts against a real account. checkLoginRateLimit/
+	// registerFailedLogin key on IPID rather than the connection, so
+	// reconnecting doesn't reset the count.
+	if limited, remaining := checkLoginRateLimit(client.Ipid()); limited {
+		client.SendServerMessage(fmt.Sprintf("Too many failed login attempts. Try again in %d seconds.", remaining))
+		return
+	}
 	auth, perms := db.AuthenticateUser(args[0], []byte(args[1]))
 	addToBuffer(client, "AUTH", fmt.Sprintf("Attempted login as %v.", args[0]), true)
 	if auth {
+		clearLoginAttempts(client.Ipid())
 		client.SetAuthenticated(true)
 		client.SetPerms(perms)
 		client.SetModName(args[0])
@@ -471,6 +481,7 @@ func cmdLogin(client *Client, args []string, _ string) {
 		addToBuffer(client, "AUTH", fmt.Sprintf("Logged in as %v.", args[0]), true)
 		return
 	}
+	registerFailedLogin(client.Ipid())
 	client.Send(&packet.AUTH{State: 0})
 	addToBuffer(client, "AUTH", fmt.Sprintf("Failed login as %v.", args[0]), true)
 }

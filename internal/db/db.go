@@ -854,12 +854,37 @@ func RemoveUser(username string) error {
 }
 
 // AuthenticateUser returns whether or not the user's credentials match those in the database, and that user's permissions.
+// dummyBcryptHash is compared against whenever a username lookup finds no
+// row, so AuthenticateUser costs about the same whether it's rejecting an
+// unknown username or a wrong password on a real account. Without this, an
+// empty PASSWORD value fails bcrypt's malformed-hash check almost instantly
+// -- a measurable timing oracle an attacker could use to enumerate valid
+// usernames by response time alone.
+var dummyBcryptHash []byte
+
+func init() {
+	// Cost matches UpdatePassword/CreateUser below (12) so the dummy compare
+	// costs the same as a real one. Only fails on a cost/length violation,
+	// neither of which applies to this fixed literal -- unreachable in
+	// practice.
+	h, err := bcrypt.GenerateFromPassword([]byte("nyathena-timing-safety-dummy"), 12)
+	if err != nil {
+		panic(fmt.Sprintf("db: failed to generate dummy bcrypt hash: %v", err))
+	}
+	dummyBcryptHash = h
+}
+
 func AuthenticateUser(username string, password []byte) (bool, uint64) {
 	var rpass, rperms string
 	result := db.QueryRow("SELECT PASSWORD, PERMISSIONS FROM USERS WHERE USERNAME = ?", username)
-	result.Scan(&rpass, &rperms)
-	err := bcrypt.CompareHashAndPassword([]byte(rpass), password)
-	if err != nil {
+	found := result.Scan(&rpass, &rperms) == nil
+
+	hash := []byte(rpass)
+	if !found {
+		hash = dummyBcryptHash
+	}
+	err := bcrypt.CompareHashAndPassword(hash, password)
+	if !found || err != nil {
 		return false, 0
 	}
 	p, err := strconv.ParseUint(rperms, 10, 64)

@@ -38,12 +38,45 @@ func TestSanitizeAreaName(t *testing.T) {
 		{"Area\"With\"Quotes", "Area_With_Quotes"},
 		{"Area<With>Brackets", "Area_With_Brackets"},
 		{"Area|With|Pipes", "Area_With_Pipes"},
+		// Path traversal: neither "." nor ".." contains any character the
+		// replacer above strips, so filepath.Join(LogPath, sanitizeAreaName(name))
+		// would otherwise resolve outside LogPath entirely.
+		{".", "_"},
+		{"..", "_"},
 	}
 
 	for _, tt := range tests {
 		result := sanitizeAreaName(tt.input)
 		if result != tt.expected {
 			t.Errorf("sanitizeAreaName(%q) = %q, want %q", tt.input, result, tt.expected)
+		}
+	}
+}
+
+// TestCreateAreaLogDirectoryRejectsTraversal is the end-to-end version of the
+// "." / ".." cases above: confirms a directory is never created outside
+// LogPath even if sanitizeAreaName's substitution were ever weakened.
+func TestCreateAreaLogDirectoryRejectsTraversal(t *testing.T) {
+	tmpDir := t.TempDir()
+	oldLogPath, oldEnabled := LogPath, EnableAreaLogging
+	LogPath = tmpDir
+	EnableAreaLogging = true
+	t.Cleanup(func() { LogPath, EnableAreaLogging = oldLogPath, oldEnabled })
+
+	for _, name := range []string{".", ".."} {
+		if err := CreateAreaLogDirectory(name); err != nil {
+			t.Fatalf("CreateAreaLogDirectory(%q): %v", name, err)
+		}
+	}
+
+	parent := filepath.Dir(tmpDir)
+	entries, err := os.ReadDir(parent)
+	if err != nil {
+		t.Fatalf("read parent dir: %v", err)
+	}
+	for _, e := range entries {
+		if e.Name() == ".." || strings.HasPrefix(e.Name(), "..-") {
+			t.Fatalf("CreateAreaLogDirectory escaped LogPath: found %q in %q", e.Name(), parent)
 		}
 	}
 }

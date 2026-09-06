@@ -610,6 +610,29 @@ func cmdPoll(client *Client, args []string, usage string) {
 		return
 	}
 
+	// Broadcast poll to area
+	pollMsg := fmt.Sprintf("=== POLL ===\n%v\n", question)
+	for i, opt := range options {
+		pollMsg += fmt.Sprintf("%v. %v\n", i+1, opt)
+	}
+	pollMsg += fmt.Sprintf("\nUse /vote <number> to vote. Poll closes in 2 minutes.")
+
+	// /poll is reqPerms:CM -- grantable per-area, not staff-only on most
+	// servers -- and broadcasts free player text (question + options)
+	// area-wide, so it must pass the same content/punishment gate /global
+	// does -- see oocCommandAllowed. Checked, and the poll only actually
+	// created, before any area state is touched, so a blocked poll never
+	// leaves a dangling "active poll" that nobody was ever shown.
+	checkText := question + "\n" + strings.Join(options, "\n")
+	echo := &packet.CTToClient{Name: encodedServerName, Message: encode(pollMsg), IsFromServer: "1"}
+	if !oocCommandAllowed(client, checkText, "poll", echo) {
+		return
+	}
+	raidGuardOnOOC(client, client.OOCName(), checkText)
+	if oocGuardVerdictSuppresses(client, checkText, echo) {
+		return
+	}
+
 	// Create poll
 	poll := &area.Poll{
 		ID:        time.Now().UnixNano(),
@@ -625,13 +648,7 @@ func cmdPoll(client *Client, args []string, usage string) {
 	client.Area().SetPollVotes(make(map[int]int))
 	client.Area().SetPlayerVotes(make(map[int]int))
 
-	// Broadcast poll to area
-	pollMsg := fmt.Sprintf("=== POLL ===\n%v\n", question)
-	for i, opt := range options {
-		pollMsg += fmt.Sprintf("%v. %v\n", i+1, opt)
-	}
-	pollMsg += fmt.Sprintf("\nUse /vote <number> to vote. Poll closes in 2 minutes.")
-	sendAreaServerMessage(client.Area(), pollMsg)
+	broadcastToArea(client.Area(), echo)
 	addToBuffer(client, "CMD", fmt.Sprintf("Created poll: %v", question), false)
 
 	// Schedule auto-close after 2 minutes
@@ -848,6 +865,19 @@ func cmd8Ball(client *Client, args []string, _ string) {
 		pool = defaultEightBallAnswers
 	}
 	answer := pool[rand.Intn(len(pool))]
-	sendAreaServerMessage(client.Area(), fmt.Sprintf("%v asked: %s\n🎱 The Magic 8-Ball says: %s",
-		oocDisplayName(client), question, answer))
+	fullMsg := fmt.Sprintf("%v asked: %s\n🎱 The Magic 8-Ball says: %s",
+		oocDisplayName(client), question, answer)
+	echo := &packet.CTToClient{Name: encodedServerName, Message: encode(fullMsg), IsFromServer: "1"}
+	// /8ball is reqPerms:NONE and broadcasts free player text area-wide, so it
+	// must pass the same content/punishment gate /global does -- see
+	// oocCommandAllowed. Gated on the player-supplied question only; the
+	// canned answer is server-controlled.
+	if !oocCommandAllowed(client, question, "8ball", echo) {
+		return
+	}
+	raidGuardOnOOC(client, client.OOCName(), question)
+	if oocGuardVerdictSuppresses(client, question, echo) {
+		return
+	}
+	broadcastToArea(client.Area(), echo)
 }

@@ -181,6 +181,14 @@ func areaNameRejection(a *area.Area, name string) string {
 	if name == "" {
 		return "Give the area a name: /area rename <name>"
 	}
+	// The name becomes a log-directory path component (logger.sanitizeAreaName
+	// strips "/" and "\" but leaves "." alone), so the literal names "." and
+	// ".." would let a rename escape the configured log directory via
+	// filepath.Join(LogPath, ".."). Rejected outright, exact match only --
+	// this is not about names merely containing a dot.
+	if name == "." || name == ".." {
+		return "Area names cannot be \".\" or \"..\"."
+	}
 	if utf8.RuneCountInString(name) > maxAreaNameLen {
 		return fmt.Sprintf("That name is %d characters; the limit is %d so the area list stays readable.",
 			utf8.RuneCountInString(name), maxAreaNameLen)

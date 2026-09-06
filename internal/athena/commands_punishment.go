@@ -587,9 +587,10 @@ func cmdUnpunish(client *Client, args []string, usage string) {
 	}
 
 	// callerTier determines whether self-removal protection applies. Admins
-	// can always self-unpunish; shadow mods can lift other shadow/admin
-	// punishments off themselves; regular mods are blocked from removing
-	// shadow/admin-issued punishments off their own UID.
+	// can always self-unpunish; regular mods and shadow mods sit at the same
+	// tier for this purpose and are both blocked from removing an
+	// admin-issued punishment off their own UID (but not one issued by a
+	// mod or a fellow shadow mod).
 	callerTier := issuerTierFor(client)
 	callerUID := client.Uid()
 
@@ -601,9 +602,9 @@ func cmdUnpunish(client *Client, args []string, usage string) {
 			if c.Area() != myArea {
 				return
 			}
-			// Self-removal protection: skip the caller if they're a regular mod
-			// and carry a shadow/admin-issued punishment.
-			if c.Uid() == callerUID && callerTier < IssuerShadow && c.HasProtectedPunishment() {
+			// Self-removal protection: skip the caller if they're below ADMIN
+			// and carry an admin-issued punishment.
+			if c.Uid() == callerUID && callerTier < IssuerAdmin && c.HasProtectedPunishment() {
 				skipped++
 				return
 			}
@@ -626,7 +627,7 @@ func cmdUnpunish(client *Client, args []string, usage string) {
 		})
 		summary := fmt.Sprintf("Removed all punishments from %v client(s) in this area.", count)
 		if skipped > 0 {
-			summary += " Your own punishments were issued by an admin or shadow mod and cannot be self-removed."
+			summary += " Your own punishments were issued by an admin and cannot be self-removed."
 		}
 		client.SendServerMessage(summary)
 		addToBuffer(client, "CMD", fmt.Sprintf("Removed all punishments from entire area (%v client(s)).", count), false)
@@ -655,20 +656,21 @@ func cmdUnpunish(client *Client, args []string, usage string) {
 	var report string
 
 	for _, c := range toUnpunish {
-		// Self-removal protection runs once per target. Regular mods cannot
-		// strip a shadow/admin-issued punishment off themselves; admins and
-		// shadow mods bypass the gate.
+		// Self-removal protection runs once per target. Anyone below ADMIN
+		// cannot strip an admin-issued punishment off themselves; admins
+		// bypass the gate. Mod and shadow mod sit at the same tier, so
+		// either can remove what the other issued.
 		isSelf := c.Uid() == callerUID
-		if isSelf && callerTier < IssuerShadow {
+		if isSelf && callerTier < IssuerAdmin {
 			if *punishmentType == "" {
 				if c.HasProtectedPunishment() {
-					client.SendServerMessage("You cannot remove all of your own punishments — at least one was issued by an admin or shadow mod. Ask staff to lift it.")
+					client.SendServerMessage("You cannot remove all of your own punishments — at least one was issued by an admin. Ask staff to lift it.")
 					continue
 				}
 			} else {
 				pType := parsePunishmentType(*punishmentType)
-				if pType != PunishmentNone && c.HasPunishment(pType) && c.PunishmentIssuerTier(pType) >= IssuerShadow {
-					client.SendServerMessage(fmt.Sprintf("Punishment '%v' was issued by an admin or shadow mod and cannot be self-removed.", pType.String()))
+				if pType != PunishmentNone && c.HasPunishment(pType) && c.PunishmentIssuerTier(pType) >= IssuerAdmin {
+					client.SendServerMessage(fmt.Sprintf("Punishment '%v' was issued by an admin and cannot be self-removed.", pType.String()))
 					continue
 				}
 			}
@@ -721,18 +723,18 @@ func cmdUnpunish(client *Client, args []string, usage string) {
 	// showname-punisher stain even when nobody with that IPID is connected.
 	// Any connected clients sharing the IPID are cleared in memory too.
 	for _, ipid := range ipidTokens {
-		// Self-removal protection applies to the IPID form as well, or a
-		// regular mod could bypass the UID-path gate with their own IPID.
-		if ipid == client.Ipid() && callerTier < IssuerShadow {
+		// Self-removal protection applies to the IPID form as well, or anyone
+		// below ADMIN could bypass the UID-path gate with their own IPID.
+		if ipid == client.Ipid() && callerTier < IssuerAdmin {
 			if *punishmentType == "" {
 				if client.HasProtectedPunishment() {
-					client.SendServerMessage("You cannot remove all of your own punishments — at least one was issued by an admin or shadow mod. Ask staff to lift it.")
+					client.SendServerMessage("You cannot remove all of your own punishments — at least one was issued by an admin. Ask staff to lift it.")
 					continue
 				}
 			} else {
 				pType := parsePunishmentType(*punishmentType)
-				if pType != PunishmentNone && client.HasPunishment(pType) && client.PunishmentIssuerTier(pType) >= IssuerShadow {
-					client.SendServerMessage(fmt.Sprintf("Punishment '%v' was issued by an admin or shadow mod and cannot be self-removed.", pType.String()))
+				if pType != PunishmentNone && client.HasPunishment(pType) && client.PunishmentIssuerTier(pType) >= IssuerAdmin {
+					client.SendServerMessage(fmt.Sprintf("Punishment '%v' was issued by an admin and cannot be self-removed.", pType.String()))
 					continue
 				}
 			}
