@@ -164,19 +164,19 @@ the area log, tagged, and staff are alerted whenever it acts.
 
 When `iphub_api_key` is set, new connections are checked against IPHub. Known IPs are cached permanently so repeat visitors never cost an API call (respects the 1,000 req/day free tier). Toggle in-game or via Discord.
 
-### Custom Tags (Admin)
+### Custom Tags (Moderator/Admin)
 
-Admins create cosmetic tags at runtime without touching config files or rebuilding.
+Moderators and admins create cosmetic tags at runtime without touching config files or rebuilding.
 
 ```
-/createtag <id> <display name>
-/grantcustomtag <username> <tag_id>
-/revokecustomtag <username> <tag_id>
-/deletetag <id>
+/createtag <id> <display name>       # MUTE
+/grantcustomtag <username> <tag_id>  # MUTE
+/revokecustomtag <username> <tag_id> # ADMIN
+/deletetag <id>                      # ADMIN
 /listcustomtags
 ```
 
-Custom tags never appear in `/shop` and can only be granted by an admin.
+Custom tags never appear in `/shop` and can only be granted by staff.
 
 ### Per-Area Logging
 

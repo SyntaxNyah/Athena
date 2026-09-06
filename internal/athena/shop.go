@@ -411,7 +411,7 @@ var shopItems = []shopItem{
 }
 
 // shopItemByID returns the item with the given ID, or (shopItem{}, false) if not found.
-// Only the built-in catalog is checked here — admin-defined custom tags live
+// Only the built-in catalog is checked here — staff-defined custom tags live
 // in the database and are looked up separately via lookupTag.
 func shopItemByID(id string) (shopItem, bool) {
 	it, ok := shopItemIndex[id]
@@ -419,7 +419,7 @@ func shopItemByID(id string) (shopItem, bool) {
 }
 
 // lookupTag resolves a tag id to its display name regardless of whether the
-// tag is built-in or admin-defined. Returns ("", false) when the id refers to
+// tag is built-in or staff-defined. Returns ("", false) when the id refers to
 // no tag at all, or to a non-tag shop item (a pass).
 func lookupTag(id string) (string, bool) {
 	if id == "" {
@@ -436,7 +436,7 @@ func lookupTag(id string) (string, bool) {
 
 // formatTagDisplay returns the bracketed tag label, e.g. "[High Roller]".
 // Returns "" when tagID is empty or unknown. Resolves both built-in and
-// admin-defined custom tags.
+// staff-defined custom tags.
 func formatTagDisplay(tagID string) string {
 	name, ok := lookupTag(tagID)
 	if !ok {
@@ -886,11 +886,11 @@ func cmdSetTag(client *Client, args []string, _ string) {
 		return
 	}
 
-	// Custom tags must always be granted by an admin first; the
+	// Custom tags must always be granted by staff first; the
 	// casino-disabled "any tag is free" rule does not apply here.
 	if name, ok := db.GetCustomTag(tagID); ok {
 		if !db.HasShopItem(client.Ipid(), tagID) {
-			client.SendServerMessage(fmt.Sprintf("You haven't been granted [%v]. Ask an admin to /grantcustomtag you this tag.", name))
+			client.SendServerMessage(fmt.Sprintf("You haven't been granted [%v]. Ask a moderator to /grantcustomtag you this tag.", name))
 			return
 		}
 		if err := db.SetActiveTag(client.Ipid(), tagID); err != nil {
@@ -904,5 +904,5 @@ func cmdSetTag(client *Client, args []string, _ string) {
 		return
 	}
 
-	client.SendServerMessage(fmt.Sprintf("Unknown tag '%v'. Use /shop <category> to browse available tag ids, or /listcustomtags for admin-defined tags.", tagID))
+	client.SendServerMessage(fmt.Sprintf("Unknown tag '%v'. Use /shop <category> to browse available tag ids, or /listcustomtags for staff-defined tags.", tagID))
 }

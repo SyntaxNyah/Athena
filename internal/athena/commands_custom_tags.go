@@ -36,9 +36,9 @@ const maxCustomTagNameLen = 30
 
 // cmdCreateTag handles /createtag <id> <display name>.
 //
-// Admins use this to mint a new cosmetic tag without rebuilding the server.
-// The id becomes the handle used by /grantcustomtag and /settag; the display
-// name is what shows in [brackets] beside a player's character name.
+// Moderators use this to mint a new cosmetic tag without rebuilding the
+// server. The id becomes the handle used by /grantcustomtag and /settag; the
+// display name is what shows in [brackets] beside a player's character name.
 //
 // Example: /createtag founder ⭐ Founder
 func cmdCreateTag(client *Client, args []string, usage string) {
@@ -120,7 +120,7 @@ func cmdDeleteTag(client *Client, args []string, usage string) {
 
 // cmdListCustomTags handles /listcustomtags.
 //
-// Visible to everyone so players can see what admin-defined tags exist on
+// Visible to everyone so players can see what staff-defined tags exist on
 // the server before asking to be granted one.
 func cmdListCustomTags(client *Client, _ []string, _ string) {
 	tags, err := db.ListCustomTags()
@@ -129,7 +129,7 @@ func cmdListCustomTags(client *Client, _ []string, _ string) {
 		return
 	}
 	if len(tags) == 0 {
-		client.SendServerMessage("No custom tags have been created yet. Admins can mint one with /createtag <id> <name>.")
+		client.SendServerMessage("No custom tags have been created yet. Moderators can mint one with /createtag <id> <name>.")
 		return
 	}
 	var b strings.Builder
@@ -142,7 +142,7 @@ func cmdListCustomTags(client *Client, _ []string, _ string) {
 		when := time.Unix(t.CreatedAt, 0).UTC().Format("2006-01-02")
 		b.WriteString(fmt.Sprintf("  [%v]  id=%v  by %v on %v\n", t.Name, t.ID, creator, when))
 	}
-	b.WriteString("\nAdmins grant with /grantcustomtag <username> <id>. Players equip with /settag <id>.")
+	b.WriteString("\nModerators grant with /grantcustomtag <username> <id>. Players equip with /settag <id>.")
 	client.SendServerMessage(b.String())
 }
 
@@ -204,7 +204,7 @@ func cmdGrantCustomTag(client *Client, args []string, usage string) {
 	// Notify the recipient if they are online right now.
 	clients.ForEach(func(c *Client) {
 		if c.ModName() == targetUser {
-			c.SendServerMessage(fmt.Sprintf("🎁 An admin granted you a new tag: [%v]. Equip it with /settag %v", displayName, tagID))
+			c.SendServerMessage(fmt.Sprintf("🎁 A moderator granted you a new tag: [%v]. Equip it with /settag %v", displayName, tagID))
 		}
 	})
 

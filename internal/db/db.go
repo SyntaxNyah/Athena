@@ -2376,7 +2376,7 @@ type CustomTag struct {
 	CreatedAt int64
 }
 
-// CreateCustomTag inserts a new admin-defined tag. Returns an error if the ID
+// CreateCustomTag inserts a new staff-defined tag. Returns an error if the ID
 // is already present in CUSTOM_TAGS — callers should also reject IDs that
 // collide with built-in shop tags before invoking this.
 func CreateCustomTag(id, name, createdBy string) error {
@@ -2455,7 +2455,7 @@ func ListCustomTags() ([]CustomTag, error) {
 }
 
 // GrantShopItem records that ipid owns itemID without spending any chips.
-// Used by admin grants (e.g. /grantcustomtag); idempotent — returns nil if the
+// Used by staff grants (e.g. /grantcustomtag); idempotent — returns nil if the
 // player already owns the item.
 func GrantShopItem(ipid, itemID string) error {
 	if db == nil {
