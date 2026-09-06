@@ -45,6 +45,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/MangosArentLiterature/Athena/internal/packet"
 	"github.com/MangosArentLiterature/Athena/internal/permissions"
 )
 
@@ -483,6 +484,37 @@ func mafiaSubWill(client *Client, args []string) {
 		client.SendServerMessage("No active Mafia game in this area.")
 		return
 	}
+
+	will := strings.Join(args, " ")
+	// A last will is stored now and broadcast area-wide, unattended, whenever
+	// its owner dies or is lynched (see broadcastToGame in mafia.go) -- there
+	// is no delivery happening "now" for oocCommandAllowed's torment/
+	// stealthmute/captcha suppression branches to hold back. Mirrors
+	// cmdAreaRename's store-now/broadcast-later content check instead:
+	// reject the content before it is ever stored, so it can never surface
+	// later at a moment nothing is gating.
+	m, result, kickAfter := autoModCheckTiered(client, will, "mafia will")
+	if m.Matched && m.Entry.Severity == SeverityNuke {
+		applyAutoModNuke(client, m, "mafia will")
+		return
+	}
+	raidGuardOnWordHit(client, m)
+	switch result {
+	case autoModBlocked:
+		if kickAfter {
+			client.KickForCensorTrip()
+		}
+		return
+	case autoModShadow:
+		// Shadow semantics: the sender is told it worked, but nothing is
+		// stored, so nobody will ever see it.
+		client.SendServerMessage("📜 Last will set. It will be revealed when you die.")
+		if kickAfter {
+			client.KickForCensorTrip()
+		}
+		return
+	}
+
 	g.mu.Lock()
 	p := g.findPlayerByClient(client)
 	if p == nil {
@@ -490,7 +522,7 @@ func mafiaSubWill(client *Client, args []string) {
 		client.SendServerMessage("You are not in the current Mafia game.")
 		return
 	}
-	p.LastWill = strings.Join(args, " ")
+	p.LastWill = will
 	g.mu.Unlock()
 	client.SendServerMessage("📜 Last will set. It will be revealed when you die.")
 }
@@ -539,6 +571,21 @@ func mafiaSubWhisper(client *Client, args []string) {
 	message := strings.Join(args[msgStart:], " ")
 	area := g.Area
 	g.mu.Unlock()
+
+	// A whisper delivers free player text directly to another player -- the
+	// same shape as /pm -- and took the same unexamined path. echo mirrors
+	// what the target is about to receive, so a suppressed whisper still
+	// leaves the sender believing it went through (shadow semantics).  Not
+	// raid-guard scored, matching /pm's own precedent: a whisper is not a
+	// broadcast and there's no correlation data to calibrate against.
+	echo := &packet.CTToClient{
+		Name:         encodedServerName,
+		Message:      encode(fmt.Sprintf("🎭 [Mafia/Private] 💬 [Whisper from %v]: %v", sender.Name(), message)),
+		IsFromServer: "1",
+	}
+	if !oocCommandAllowed(client, message, "mafia whisper", echo) {
+		return
+	}
 
 	// Target receives the actual message
 	g.privateMsg(target, fmt.Sprintf("💬 [Whisper from %v]: %v", sender.Name(), message))

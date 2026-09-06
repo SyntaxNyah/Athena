@@ -25,6 +25,7 @@ import (
 	"io"
 	"math"
 	"net"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"sync"
@@ -306,14 +307,18 @@ const (
 )
 
 // IssuerTier records the permission tier of the moderator who applied a
-// punishment. Used by /unpunish to block self-removal of staff-issued
-// punishments by a regular moderator targeting their own UID.
+// punishment. Used by /unpunish to block self-removal of admin-issued
+// punishments by anyone below ADMIN targeting their own UID. Mod and Shadow
+// sit at the same tier for this purpose — a shadow mod carries no more
+// formal authority than a regular moderator, only stealth (they differ
+// elsewhere, e.g. hidden from non-admin /gas/players) — so a punishment
+// either of them issues is removable by either of them, self included.
 type IssuerTier byte
 
 const (
 	IssuerSystem IssuerTier = iota // automod, /maso, hangman, etc. — no protection
 	IssuerMod                      // regular moderator with MUTE
-	IssuerShadow                   // SHADOW (no ADMIN) — protected from self-removal
+	IssuerShadow                   // SHADOW (no ADMIN) — same protection tier as IssuerMod
 	IssuerAdmin                    // ADMIN — protected from self-removal
 )
 
@@ -661,9 +666,70 @@ func (client *Client) markClosed() {
 	}
 }
 
+// maxPacketBytes bounds how many bytes may be buffered while reading a single
+// packet off the wire before a terminator ('%') or a complete JSON value is
+// seen. Without this cap a client that never sends a terminator can make
+// bufio.Reader/json.Decoder grow their scratch buffer without limit, which
+// across many concurrent connections is a memory-amplification DoS bounded
+// only by the ping-timeout watchdog. No legitimate AO2 packet (chat text is
+// already capped by max_message_length well below this) needs anywhere near
+// this much room.
+const maxPacketBytes = 64 * 1024
+
+// errPacketTooLarge is returned by boundedReader once a single packet-read
+// attempt exceeds maxPacketBytes.
+var errPacketTooLarge = errors.New("packet exceeds maximum size")
+
+// boundedReader wraps a connection so a read cycle can be capped without
+// touching the FantaCode/JSON parsing logic downstream. n is reset to 0 by
+// the caller at the start of each packet-read attempt, so every packet gets
+// a fresh budget rather than the cap applying to the whole connection.
+type boundedReader struct {
+	r   io.Reader
+	max int
+	n   int
+}
+
+func (b *boundedReader) Read(p []byte) (int, error) {
+	if b.n >= b.max {
+		return 0, errPacketTooLarge
+	}
+	if rem := b.max - b.n; len(p) > rem {
+		p = p[:rem]
+	}
+	n, err := b.r.Read(p)
+	b.n += n
+	return n, err
+}
+
 // handleClient handles a client connection to the server.
 func (client *Client) HandleClient() {
 	defer client.clientCleanup()
+
+	// Tracks the header of the packet currently being dispatched, so a
+	// recovered panic (below) can name what triggered it. Declared here,
+	// ahead of the recover closure, since a deferred closure can only
+	// reference a local variable already in scope at the point it's defined.
+	var lastHandledHeader string
+
+	// A panic anywhere in a packet handler (of which there are hundreds,
+	// spanning the whole command surface) would otherwise be unrecovered and
+	// crash the entire process -- taking every connected player down with
+	// it, not just this one connection. Recovering here bounds the blast
+	// radius to the single connection that triggered it: the recovered
+	// panic is logged loudly (a stack trace, since the handler surface this
+	// guards is too broad for a bare panic value to be actionable on its
+	// own) and the connection is closed rather than left to keep running
+	// handlers against what may now be partially-mutated state.
+	defer func() {
+		if rec := recover(); rec != nil {
+			logger.LogErrorf("panic handling %q packet from IPID:%v UID:%v: %v\n%s",
+				lastHandledHeader, client.Ipid(), client.Uid(), rec, debug.Stack())
+			logger.WriteAudit(fmt.Sprintf("%v | PANIC | IPID:%v | UID:%v | header:%v | %v",
+				time.Now().UTC().Format("15:04:05"), client.Ipid(), client.Uid(), lastHandledHeader, rec))
+			client.markClosed()
+		}
+	}()
 
 	if client.CheckBanned(db.IPID) {
 		return
@@ -725,17 +791,31 @@ func (client *Client) HandleClient() {
 	// The same *bufio.Reader backs both code paths, and the json.Decoder is
 	// reused after first creation so it can carry its internal buffer
 	// forward across consecutive JSON packets.
-	br := bufio.NewReader(client.conn)
+	// bcr caps how many bytes any single packet-read attempt below may pull
+	// off the raw socket (see maxPacketBytes) -- a client that never sends a
+	// terminator/complete JSON value would otherwise let br/jsonDec grow
+	// their scratch buffer without bound.
+	bcr := &boundedReader{r: client.conn, max: maxPacketBytes}
+	br := bufio.NewReader(bcr)
 	var jsonDec *json.Decoder
 
 	for {
+		// Fresh budget for this packet-read attempt.
+		bcr.n = 0
+
 		// Skip ASCII whitespace between packets (web clients sometimes flush
 		// a stray "\n" between messages). EOF here means the peer hung up.
 		if err := skipNetWhitespace(br); err != nil {
+			if errors.Is(err, errPacketTooLarge) {
+				client.closeForOversizedPacket()
+			}
 			return
 		}
 		lead, err := br.Peek(1)
 		if err != nil {
+			if errors.Is(err, errPacketTooLarge) {
+				client.closeForOversizedPacket()
+			}
 			return
 		}
 
@@ -747,12 +827,18 @@ func (client *Client) HandleClient() {
 			}
 			var msg json.RawMessage
 			if err := jsonDec.Decode(&msg); err != nil {
+				if errors.Is(err, errPacketTooLarge) {
+					client.closeForOversizedPacket()
+				}
 				return
 			}
 			rawPacket = string(msg)
 		} else {
 			line, err := br.ReadString('%')
 			if err != nil {
+				if errors.Is(err, errPacketTooLarge) {
+					client.closeForOversizedPacket()
+				}
 				return
 			}
 			rawPacket = strings.TrimSuffix(line, "%")
@@ -823,8 +909,18 @@ func (client *Client) HandleClient() {
 			logger.LogWarningf("dropped %s packet from IPID:%v — client has not completed handshake (UID=-1)", pkt.Header, client.Ipid())
 			continue
 		}
+		lastHandledHeader = pkt.Header
 		v.Func(client, pkt)
 	}
+}
+
+// closeForOversizedPacket logs and closes the connection when a single
+// packet-read attempt exceeded maxPacketBytes without producing a complete
+// packet. Distinguished from an ordinary disconnect (plain EOF) so staff can
+// tell the two apart in the logs.
+func (client *Client) closeForOversizedPacket() {
+	logger.LogWarningf("closing connection IPID:%v UID:%v — packet exceeded %d bytes without completing", client.Ipid(), client.Uid(), maxPacketBytes)
+	client.conn.Close()
 }
 
 // skipNetWhitespace discards ASCII whitespace bytes at the head of br so the
@@ -2501,8 +2597,8 @@ func (client *Client) AddPunishment(pType PunishmentType, duration time.Duration
 }
 
 // AddPunishmentBy adds a punishment and records the tier of the issuer so that
-// /unpunish can block a moderator from silently lifting a punishment that an
-// admin or shadow mod applied to them.
+// /unpunish can block anyone below ADMIN from silently lifting a punishment
+// that an admin applied to them.
 func (client *Client) AddPunishmentBy(pType PunishmentType, duration time.Duration, reason string, tier IssuerTier) {
 	client.mu.Lock()
 	defer client.mu.Unlock()
@@ -2565,14 +2661,16 @@ func (client *Client) PunishmentIssuerTier(pType PunishmentType) IssuerTier {
 	return IssuerSystem
 }
 
-// HasProtectedPunishment reports whether the client carries any punishment that
-// was applied by a shadow mod or admin (issuer tier ≥ IssuerShadow). Used by
-// /unpunish to decide whether to block a moderator's self-removal request.
+// HasProtectedPunishment reports whether the client carries any punishment
+// that was applied by an admin (issuer tier IssuerAdmin). Used by /unpunish
+// to decide whether to block a self-removal request from anyone below
+// ADMIN. A shadow-mod-issued punishment is NOT protected here — Mod and
+// Shadow sit at the same tier, so either can remove what the other issued.
 func (client *Client) HasProtectedPunishment() bool {
 	client.mu.Lock()
 	defer client.mu.Unlock()
 	for _, p := range client.punishments {
-		if p.issuerTier >= IssuerShadow {
+		if p.issuerTier >= IssuerAdmin {
 			return true
 		}
 	}

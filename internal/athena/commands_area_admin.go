@@ -753,23 +753,6 @@ func cmdMusicUnlock(client *Client, _ []string, _ string) {
 	addToBuffer(client, "CMD", "Music unlocked.", false)
 }
 
-// Handles /log
-
-func cmdLog(client *Client, args []string, _ string) {
-	wantedArea, err := strconv.Atoi(args[0])
-	if err != nil {
-		client.SendServerMessage("Invalid area.")
-		return
-	}
-	for i, a := range areas {
-		if i == wantedArea {
-			client.SendServerMessage(strings.Join(a.Buffer(), "\n"))
-			return
-		}
-	}
-	client.SendServerMessage("Invalid area.")
-}
-
 // Handles /login
 
 func cmdMotd(client *Client, _ []string, _ string) {

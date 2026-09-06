@@ -397,8 +397,20 @@ var areaNameReplacer = strings.NewReplacer(
 )
 
 // sanitizeAreaName converts an area name to a safe folder name.
+//
+// Defense in depth against path traversal: areaNameReplacer strips "/" and
+// "\" from a name, but a name that is exactly "." or ".." contains neither,
+// and filepath.Join(LogPath, "..") escapes LogPath entirely -- the primary
+// guard against this lives in athena's areaNameRejection (the /area rename
+// validator), but this function is also reachable from areas.toml-configured
+// names that never go through that validator, so it must hold the same
+// invariant on its own.
 func sanitizeAreaName(name string) string {
-	return areaNameReplacer.Replace(name)
+	safe := areaNameReplacer.Replace(name)
+	if safe == "." || safe == ".." {
+		return "_"
+	}
+	return safe
 }
 
 // CreateAreaLogDirectory creates a log directory for an area if it doesn't exist

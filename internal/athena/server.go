@@ -140,6 +140,20 @@ var (
 		last:   make(map[string]time.Time),
 	}
 
+	// loginAttemptTracker counts failed /login attempts per IPID within a rolling
+	// window (see checkLoginRateLimit/registerFailedLogin), so a connection can't
+	// just keep guessing passwords against a real account indefinitely. bcrypt's
+	// own cost already slows this down, but with no limiter at all a raider running
+	// many connections in parallel still has unbounded attempts.
+	loginAttemptTracker = struct {
+		mu     sync.Mutex
+		counts map[string]int       // ipid -> failed attempts within the current window
+		last   map[string]time.Time // ipid -> time of the last counted attempt
+	}{
+		counts: make(map[string]int),
+		last:   make(map[string]time.Time),
+	}
+
 	// ipFirstSeenTracker records the first time each IPID connected to this server session.
 	// Entries are never deleted so that returning IPIDs are never treated as "new" again.
 	ipFirstSeenTracker = struct {
@@ -1350,6 +1364,64 @@ func registerRateLimitKick(ipid string) int {
 	rateLimitKickTracker.counts[ipid]++
 
 	return rateLimitKickTracker.counts[ipid]
+}
+
+// maxLoginAttempts and loginAttemptWindow bound how many failed /login
+// attempts an IPID gets before checkLoginRateLimit starts refusing further
+// tries. A local constant rather than a config key, matching how other
+// small safety caps in this codebase (e.g. maxAreaNameLen) are sized without
+// needing an operator-facing knob.
+const (
+	maxLoginAttempts   = 5
+	loginAttemptWindow = 5 * time.Minute
+)
+
+// checkLoginRateLimit reports whether ipid has exceeded maxLoginAttempts
+// failed /login attempts within loginAttemptWindow, and if so how many
+// seconds remain before it may try again. An attempt outside the window
+// clears the counter as a side effect, mirroring registerRateLimitKick's own
+// "a gap this long means a fresh spree" treatment.
+func checkLoginRateLimit(ipid string) (limited bool, remaining int) {
+	loginAttemptTracker.mu.Lock()
+	defer loginAttemptTracker.mu.Unlock()
+
+	count, ok := loginAttemptTracker.counts[ipid]
+	if !ok || count < maxLoginAttempts {
+		return false, 0
+	}
+	elapsed := time.Since(loginAttemptTracker.last[ipid])
+	if elapsed >= loginAttemptWindow {
+		delete(loginAttemptTracker.counts, ipid)
+		delete(loginAttemptTracker.last, ipid)
+		return false, 0
+	}
+	return true, int(math.Ceil((loginAttemptWindow - elapsed).Seconds()))
+}
+
+// registerFailedLogin records a failed /login attempt for ipid. A gap longer
+// than loginAttemptWindow since the previous attempt restarts the count at 1,
+// so this targets a concentrated burst of guesses rather than attempts spread
+// thinly over a whole session.
+func registerFailedLogin(ipid string) {
+	loginAttemptTracker.mu.Lock()
+	defer loginAttemptTracker.mu.Unlock()
+
+	now := time.Now()
+	if last, ok := loginAttemptTracker.last[ipid]; ok && now.Sub(last) > loginAttemptWindow {
+		loginAttemptTracker.counts[ipid] = 0
+	}
+	loginAttemptTracker.last[ipid] = now
+	loginAttemptTracker.counts[ipid]++
+}
+
+// clearLoginAttempts resets the failed-attempt counter for ipid, called after
+// a successful login so a legitimate sign-in isn't left one attempt closer to
+// a limit some earlier typo racked up.
+func clearLoginAttempts(ipid string) {
+	loginAttemptTracker.mu.Lock()
+	delete(loginAttemptTracker.counts, ipid)
+	delete(loginAttemptTracker.last, ipid)
+	loginAttemptTracker.mu.Unlock()
 }
 
 // rateLimitKickAutobanDuration parses the configured cooldown duration for the
