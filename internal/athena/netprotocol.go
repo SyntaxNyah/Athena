@@ -308,6 +308,11 @@ func pktReqDone(client *Client, _ *packet.Packet) {
 	client.restoreRandomCharCurse()
 	client.restoreShownamePunishStain()
 
+	// Join popup: shown first, ahead of every other join-sequence message, to
+	// a connection whose IPID has never connected to this server before. It's
+	// a no-op for anyone else, so it costs nothing to check up front.
+	issueJoinPopup(client)
+
 	// Casino on-join setup: seed chip balance and prompt unregistered players.
 	// When the casino is off but the account system is enabled, the account
 	// welcome message (wardrobe / default tags / playtime tracking) is shown

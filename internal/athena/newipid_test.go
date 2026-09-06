@@ -261,6 +261,36 @@ func TestRecordIPFirstSeenIdempotent(t *testing.T) {
 	}
 }
 
+// TestRecordIPFirstSeenReturnsWhetherGenuinelyNew pins the return value the
+// join popup (joinpopup.go) relies on: true exactly once, for the call that
+// actually creates the entry, and false for every call after that -- whether
+// that's a reconnect this session or the seeded-from-the-database case (an
+// IPID the server already knew about before this process started).
+func TestRecordIPFirstSeenReturnsWhetherGenuinelyNew(t *testing.T) {
+	resetFirstSeenTracker()
+
+	ipid := "testRecordReturnsNew"
+	if !recordIPFirstSeen(ipid) {
+		t.Error("first call for a never-seen IPID should report true")
+	}
+	for i := 0; i < 3; i++ {
+		if recordIPFirstSeen(ipid) {
+			t.Errorf("call %d for an already-seen IPID should report false", i)
+		}
+	}
+
+	// An IPID seeded at startup from KNOWN_IPS (see InitServer) is pre-loaded
+	// into the tracker before any connection arrives, exactly like an
+	// already-seen one -- so it must never report new either.
+	seeded := "testRecordSeededFromDB"
+	ipFirstSeenTracker.mu.Lock()
+	ipFirstSeenTracker.times[seeded] = time.Unix(0, 0)
+	ipFirstSeenTracker.mu.Unlock()
+	if recordIPFirstSeen(seeded) {
+		t.Error("an IPID pre-seeded from the database should not report new")
+	}
+}
+
 // TestNewIPIDUnseenIsNotBlocked tests that an IPID never passed to recordIPFirstSeen
 // is not blocked (e.g., if the tracker is empty for some reason).
 func TestNewIPIDUnseenIsNotBlocked(t *testing.T) {

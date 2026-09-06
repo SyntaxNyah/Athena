@@ -356,8 +356,15 @@ type Client struct {
 	// writeMu serializes inline socket writes with each other. Deliberately
 	// separate from mu: nothing that blocks on I/O may hold the mutex ordinary
 	// field accessors use -- see Client.write.
-	writeMu             sync.Mutex
-	joining             bool
+	writeMu sync.Mutex
+	joining bool
+	// isNewIPID is set once, before the packet-handling loop starts (in
+	// acceptTCPConnection/HandleWS, from recordIPFirstSeen's return value),
+	// and only ever read afterwards (issueJoinPopup) -- so, like joining, it
+	// needs no lock: by the time anything reads it, the single goroutine that
+	// wrote it has already handed off via ordinary happens-before (direct
+	// call for TCP, goroutine creation for WS).
+	isNewIPID           bool
 	hdid                string
 	uid                 int
 	area                *area.Area
