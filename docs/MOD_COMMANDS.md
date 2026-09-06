@@ -69,6 +69,14 @@ Censor trips (AutoMod banned words and `censored_names.txt` shownames) alert eve
 
 ---
 
+## Communication
+
+| Command | Permission | Description |
+|---------|-----------|-------------|
+| `/announce <message>` | MUTE | Broadcasts a `[Announcement] <message>` server OOC message to every connected player. In-game equivalent of the Discord bot's `/announce` slash command — use it without needing the Discord bridge configured. |
+
+---
+
 ## Voice Moderation
 
 | Command | Permission | Description |
@@ -340,7 +348,7 @@ There is no longer a `grant` verb: the four commands it armed have been removed 
 | `/status` | Server status |
 | `/mute /unmute /ban /unban /kick /gag /ungag /warn /warnings` | Moderation actions |
 | `/parrot /drunk /slowpoke /roulette /spotlight /whisper /stutterstep /backward` | Apply punishments |
-| `/pm /announce /announce_player` | Communication |
+| `/pm /announce /announce_player` | Communication. `/announce` mirrors the in-game `/announce <message>` (see [Communication](#communication) above). |
 | `/forcemove /cleararea /lock /unlock` | Area control |
 | `/logs /auditlog /banlist` | Audit & logs |
 | `/firewall on\|off` | Toggle IPHub VPN screening |

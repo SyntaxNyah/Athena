@@ -977,6 +977,15 @@ Mirrors the in-game security commands so moderators don't have to be logged in t
 | `/lockdown on` / `/lockdown off` | Toggle the server-wide new-IPID lockdown. `on` also runs the lockdown playtime purge below. |
 | `/lockdown whitelist_all` | Whitelist every currently-connected IPID so they can rejoin during lockdown. |
 
+### `/announce` — In-Game Server Announcement
+Mirrors the Discord bot's `/announce` slash command (`handleAnnounce` → `ServerAdapter.SendAnnouncement`, `internal/discord/bot/communication.go` / `internal/athena/discord_adapter.go`) so a moderator can reach every connected player without the Discord bridge configured or an admin having to relay it from Discord.
+
+```
+/announce <message>   # MUTE — broadcasts "[Announcement] <message>" to every connected player
+```
+
+Sends a server OOC message (`sendGlobalServerMessage`, the same helper minigame/event broadcasts already use) to every client that has completed the join handshake — identical reach to the Discord version's own `Uid() != -1` filter. Unlike `/global`/`/pm`, it is not routed through `oocCommandAllowed`/AutoMod/the raid guard: like `/modchat`, `/kick`'s reason, or a ban reason, the text is moderator-authored rather than player-submitted, so there is nothing for the word filter to protect against. The issuing moderator gets a confirmation echo and the announcement is written to their area's CMD log. Implemented in `cmdAnnounce` (`internal/athena/commands_moderation.go`).
+
 ### Lockdown Playtime Purge
 `/lockdown` (in-game or the Discord bot's `/lockdown on`) used to only ever block *new* (previously-unseen) IPIDs from connecting — anyone already inside when a moderator reacted to a raid stayed inside and kept spamming, since by the time lockdown flips on, every flooding connection has already gotten past the join gate and is "known" for the rest of the session.
 

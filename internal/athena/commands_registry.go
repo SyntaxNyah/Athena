@@ -587,6 +587,14 @@ func initCommands() {
 			reqPerms: permissions.PermissionField["MOD_CHAT"],
 			category: "moderation",
 		},
+		"announce": {
+			handler:  cmdAnnounce,
+			minArgs:  1,
+			usage:    "Usage: /announce <message>",
+			desc:     "Broadcasts a server announcement to every connected player. Same as the Discord bot's /announce.",
+			reqPerms: permissions.PermissionField["MUTE"],
+			category: "moderation",
+		},
 		"motd": {
 			handler:  cmdMotd,
 			minArgs:  0,

@@ -562,6 +562,21 @@ func cmdModChat(client *Client, args []string, _ string) {
 	})
 }
 
+// Handles /announce
+//
+// Mirrors the Discord bot's /announce slash command (handleAnnounce ->
+// ServerAdapter.SendAnnouncement in internal/athena/discord_adapter.go) so a
+// moderator can reach every connected player without the Discord bridge
+// being configured. Same "[Announcement] <message>" server OOC message to
+// every joined client (sendGlobalServerMessage already excludes connections
+// with no UID yet, exactly like SendAnnouncement's own ForEach does).
+func cmdAnnounce(client *Client, args []string, _ string) {
+	msg := strings.Join(args, " ")
+	sendGlobalServerMessage("[Announcement] " + msg)
+	client.SendServerMessage(fmt.Sprintf("📢 Announcement sent to every connected player:\n> %v", msg))
+	addToBuffer(client, "CMD", fmt.Sprintf("Sent server announcement: %v", msg), true)
+}
+
 // Handles /motd
 
 func cmdMute(client *Client, args []string, usage string) {
