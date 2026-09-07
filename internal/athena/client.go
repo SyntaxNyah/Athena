@@ -466,6 +466,16 @@ type Client struct {
 	// fresh connection defaults back to alerts on. See punishment_audit.go.
 	punishAuditOff atomic.Bool
 
+	// oocHidden mutes regular OOC chat for this client's session (/toggle
+	// global): the area's local OOC and player-initiated /global broadcasts
+	// stop reaching them, for players who'd rather not see the spam. Direct
+	// messages (/pm) and staff/system broadcasts (/mod -g, /modchat,
+	// announcements, moderation alerts) are untouched -- this only ever
+	// suppresses delivery to THIS client, never affects what anyone else
+	// sees, and every fresh connection defaults back to OOC visible. See
+	// commands_toggle.go.
+	oocHidden atomic.Bool
+
 	// charProtectOn arms /charprotect for this moderator: if they change into
 	// an area where another player already holds their claimed character,
 	// that player is bumped to a random free character instead of the

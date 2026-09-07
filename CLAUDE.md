@@ -1200,6 +1200,17 @@ Lets **any** player opt into being automatically disconnected after a chosen str
 
 `/dc` is a plain alias of `/dctime`. A single watcher goroutine is spawned lazily on first enable (CAS-gated) and lives for the rest of the connection, no-opping while disabled and exiting on `client.done`, so re-enabling never respawns it and there is no start/stop race. The watcher re-checks every 10 s, so the disconnect lands within ~10 s of the deadline — plenty precise for an AFK timer. Documented in `/help` via the command's registry `desc`/`usage`.
 
+### Self-Service OOC-Hide Toggle (`/toggle global`)
+Lets **any** player mute regular OOC chat for themselves — area OOC and `/global` broadcasts alike — for those who find the constant OOC spam distracting. No permission required (`general` category); implemented in `internal/athena/commands_toggle.go`.
+
+```
+/toggle global   # hide area OOC + /global for yourself; run again to show it
+```
+
+- **Opt-in and self-only:** OFF by default, and it never changes what anyone else sees — it is a delivery filter applied at the two broadcast points that fan regular OOC chat out (`broadcastOOCToArea`/`broadcastOOCToAll`, `internal/athena/server.go`), gated on a per-session `atomic.Bool` (`Client.OOCHidden`/`SetOOCHidden`). Every fresh connection defaults back to OOC visible, the same session-only shape as `/censoralerts`, `/raidguard alert` and `/punishaudit`.
+- **Scoped to "spam", not to every OOC-shaped packet.** Direct messages (`/pm`) and staff/system broadcasts — `/mod -g`, `/modchat`, `/announce`, moderation alerts (`[CENSOR]`, `[RAIDGUARD]`, `[BAN]`, `[AUDIT]`, ...) — go through `broadcastToArea`/`broadcastToAll` directly and are never affected by this toggle, since those are either addressed specifically to the player or something staff need seen regardless of a player's OOC preference.
+- Toggling back off restores area OOC and `/global` immediately; there is nothing to miss in between since nothing is buffered — messages sent while hidden are simply never delivered to that client.
+
 ### Other Features
 - Hot Potato area minigame
 - Quick Draw area minigame

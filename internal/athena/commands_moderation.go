@@ -358,7 +358,7 @@ func cmdGlobal(client *Client, args []string, _ string) {
 		return
 	}
 
-	broadcastToAll(out)
+	broadcastOOCToAll(out)
 	addToBuffer(client, "OOC", "[GLOBAL] \""+msg+"\"", false)
 }
 

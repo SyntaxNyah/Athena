@@ -949,6 +949,39 @@ func broadcastToAreaFrom(senderIPID string, senderIsMod bool, area *area.Area, p
 	})
 }
 
+// broadcastOOCToArea fans a plain area-OOC-chat packet to an area, honoring
+// per-recipient ignore lists (unless the sender is a moderator) exactly like
+// broadcastToAreaFrom, plus each recipient's /toggle global OOC-hide
+// preference. Used only for ordinary local OOC chat -- PMs and staff/system
+// broadcasts go through broadcastToAreaFrom/broadcastToArea directly so this
+// toggle can never hide something a player was specifically sent or
+// something staff need seen.
+func broadcastOOCToArea(senderIPID string, senderIsMod bool, area *area.Area, p packet.Outgoing) {
+	header, args := p.Header(), p.Args()
+	clients.ForEach(func(client *Client) {
+		if client.Area() == area && (senderIsMod || !client.IgnoresIPID(senderIPID)) && !client.OOCHidden() {
+			client.SendPacket(header, args...)
+		}
+	})
+}
+
+// broadcastOOCToAll fans a player-initiated /global OOC broadcast to every
+// UID-registered client, skipping anyone who has muted OOC chat via /toggle
+// global. Used only for /global -- moderator broadcasts (/mod -g,
+// /modchat) and system announcements go through broadcastToAll directly so
+// they are never hidden by this toggle.
+func broadcastOOCToAll(p packet.Outgoing) {
+	if !puAllowed(p) {
+		return
+	}
+	header, args := p.Header(), p.Args()
+	clients.ForEach(func(client *Client) {
+		if client.Uid() != -1 && !client.OOCHidden() {
+			client.SendPacket(header, args...)
+		}
+	})
+}
+
 // broadcastToAllClients fans a typed packet to every connected client,
 // including those that haven't yet been assigned a UID.
 func broadcastToAllClients(p packet.Outgoing) {

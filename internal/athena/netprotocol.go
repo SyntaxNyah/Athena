@@ -1676,7 +1676,7 @@ func pktOOC(client *Client, p *packet.Packet) {
 	// needed.
 	raidGuardOnOOC(client, ct.Name, decode(msg))
 
-	broadcastToAreaFrom(client.Ipid(), senderBypassesIgnore(client.Perms()), client.Area(),
+	broadcastOOCToArea(client.Ipid(), senderBypassesIgnore(client.Perms()), client.Area(),
 		&packet.CTToClient{Name: encode(displayUsername), Message: msg, IsFromServer: "0"})
 	addToBuffer(client, "OOC", "\""+msg+"\"", false)
 }
