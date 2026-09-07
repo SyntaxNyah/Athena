@@ -462,22 +462,24 @@ Enabled with `enable_casino = true`. Requires player accounts (`/register`).
 
 See `CASINO_COMMANDS.md` for the full reference.
 
-### Custom Tags (Admin)
+### Custom Tags (Moderator/Admin)
 
-Admins can mint cosmetic tags at runtime without rebuilding the server. Custom tags share the same equip system as the built-in shop tags (`/settag`, `[Name]` shown in `/gas` and `/players`) but have their own DB table (`CUSTOM_TAGS`) and are only ownable via admin grant — they never appear in `/shop` and never cost chips.
+Moderators and admins can mint cosmetic tags at runtime without rebuilding the server. Custom tags share the same equip system as the built-in shop tags (`/settag`, `[Name]` shown in `/gas` and `/players`) but have their own DB table (`CUSTOM_TAGS`) and are only ownable via a staff grant — they never appear in `/shop` and never cost chips.
 
 | Command | Permission | Purpose |
 |---------|------------|---------|
-| `/createtag <id> <display name>` | `ADMIN` | Create a new custom tag. Id must be 2–32 lowercase letters/digits/underscores; display name (≤30 chars, no `[` or `]`) is what shows in brackets. Rejects ids that collide with built-in shop tags. |
+| `/createtag <id> <display name>` | `MUTE` | Create a new custom tag. Id must be 2–32 lowercase letters/digits/underscores; display name (≤30 chars, no `[` or `]`) is what shows in brackets. Rejects ids that collide with built-in shop tags. |
 | `/deletetag <id>` | `ADMIN` | Delete a custom tag and clean up every grant + active equip referencing it. Built-in tag ids are protected. |
-| `/grantcustomtag <username> <tag_id>` | `ADMIN` | Grant any tag (built-in or custom) to a registered player account. Looks up the account's IPID by username — the player must have logged in at least once so the IPID is linked. Idempotent. |
+| `/grantcustomtag <username> <tag_id>` | `MUTE` | Grant any tag (built-in or custom) to a registered player account. Looks up the account's IPID by username — the player must have logged in at least once so the IPID is linked. Idempotent. Note: since this grants *any* shop tag, not just custom ones, a moderator can use it to hand out a normally chip-priced tag for free. |
 | `/revokecustomtag <username> <tag_id>` | `ADMIN` | Revoke a previously granted tag from an account; clears it from their active equip if equipped. |
 | `/listcustomtags` | none | List every custom tag with its id, name, creator, and creation date. Visible to all players. |
 
+Creation and granting are deliberately the lower `MUTE` tier so moderators can run staff-tag workflows without an admin; deletion and revocation stay `ADMIN`-gated since they're the harder-to-reverse, larger-blast-radius half (a delete unwinds every grant and equip of a tag server-wide).
+
 **Workflow:**
 ```
-admin> /createtag founder ⭐ Founder
-admin> /grantcustomtag alice founder
+mod> /createtag founder ⭐ Founder
+mod> /grantcustomtag alice founder
 alice> /settag founder       → alice now wears [⭐ Founder]
 ```
 
@@ -974,6 +976,15 @@ Mirrors the in-game security commands so moderators don't have to be logged in t
 | `/firewall on` / `/firewall off` | Toggle the IPHub VPN/proxy firewall. Refuses to enable if `iphub_api_key` is unset. |
 | `/lockdown on` / `/lockdown off` | Toggle the server-wide new-IPID lockdown. `on` also runs the lockdown playtime purge below. |
 | `/lockdown whitelist_all` | Whitelist every currently-connected IPID so they can rejoin during lockdown. |
+
+### `/announce` — In-Game Server Announcement
+Mirrors the Discord bot's `/announce` slash command (`handleAnnounce` → `ServerAdapter.SendAnnouncement`, `internal/discord/bot/communication.go` / `internal/athena/discord_adapter.go`) so a moderator can reach every connected player without the Discord bridge configured or an admin having to relay it from Discord.
+
+```
+/announce <message>   # MUTE — broadcasts "[Announcement] <message>" to every connected player
+```
+
+Sends a server OOC message (`sendGlobalServerMessage`, the same helper minigame/event broadcasts already use) to every client that has completed the join handshake — identical reach to the Discord version's own `Uid() != -1` filter. Unlike `/global`/`/pm`, it is not routed through `oocCommandAllowed`/AutoMod/the raid guard: like `/modchat`, `/kick`'s reason, or a ban reason, the text is moderator-authored rather than player-submitted, so there is nothing for the word filter to protect against. The issuing moderator gets a confirmation echo and the announcement is written to their area's CMD log. Implemented in `cmdAnnounce` (`internal/athena/commands_moderation.go`).
 
 ### Lockdown Playtime Purge
 `/lockdown` (in-game or the Discord bot's `/lockdown on`) used to only ever block *new* (previously-unseen) IPIDs from connecting — anyone already inside when a moderator reacted to a raid stayed inside and kept spamming, since by the time lockdown flips on, every flooding connection has already gotten past the join gate and is "known" for the rest of the session.
