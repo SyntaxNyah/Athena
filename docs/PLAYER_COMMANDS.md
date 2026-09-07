@@ -236,6 +236,7 @@ So you never have to remember to undo one, and a restart returns every area to i
 | `/buytag <id>` | Buy a tag (chips required if casino enabled) |
 | `/settag <id>` | Equip a tag — shows `[Tag Name]` in `/gas`, `/players`, OOC, `/global` |
 | `/cleartag` | Remove your equipped tag |
+| `/mytags` | List the tags **you** own — ids and names, active one marked |
 | `/listcustomtags` | List every staff-minted custom tag |
 
 ---

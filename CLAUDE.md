@@ -473,6 +473,7 @@ Moderators and admins can mint cosmetic tags at runtime without rebuilding the s
 | `/grantcustomtag <username> <tag_id>` | `MUTE` | Grant any tag (built-in or custom) to a registered player account. Looks up the account's IPID by username — the player must have logged in at least once so the IPID is linked. Idempotent. Note: since this grants *any* shop tag, not just custom ones, a moderator can use it to hand out a normally chip-priced tag for free. |
 | `/revokecustomtag <username> <tag_id>` | `ADMIN` | Revoke a previously granted tag from an account; clears it from their active equip if equipped. |
 | `/listcustomtags` | none | List every custom tag with its id, name, creator, and creation date. Visible to all players. |
+| `/mytags` | none | Self-service: list *your own* tags — built-in and custom alike — with their ids and which one is active. |
 
 Creation and granting are deliberately the lower `MUTE` tier so moderators can run staff-tag workflows without an admin; deletion and revocation stay `ADMIN`-gated since they're the harder-to-reverse, larger-blast-radius half (a delete unwinds every grant and equip of a tag server-wide).
 
@@ -481,7 +482,10 @@ Creation and granting are deliberately the lower `MUTE` tier so moderators can r
 mod> /createtag founder ⭐ Founder
 mod> /grantcustomtag alice founder
 alice> /settag founder       → alice now wears [⭐ Founder]
+alice> /mytags                → lists [⭐ Founder]  (id: founder)  ← active
 ```
+
+**`/mytags` (bug fix along the way).** `/shop items` already listed everything a player owned, but its tag branch resolved names purely through `shopItemByID` — the built-in catalog index — so a custom tag id, which lives in `CUSTOM_TAGS` instead, missed that lookup and was silently dropped from the "🏷️ Tags" section entirely: a player who owned only a custom tag saw `/shop items` claim they owned nothing. `/mytags` is a new, narrower command (just tags, none of `/shop items`'s pass/passive-income noise) built on `lookupTag`, which already correctly falls back to `db.GetCustomTag` — and `shopListOwned` (the code behind `/shop items`) now takes the same fallback, so the two commands can no longer disagree about what counts as an owned tag. Pinned by `TestLookupTagResolvesCustomTags` (`internal/athena/shop_test.go`) and `TestGetPlayerShopItemsIncludesCustomTags` (`internal/db/db_custom_tags_test.go`).
 
 ### Per-Area Logging
 

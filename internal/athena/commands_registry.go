@@ -2655,6 +2655,15 @@ func initCommands() {
 			accountCmd: true,
 			category:   "chips",
 		},
+		"mytags": {
+			handler:    cmdMyTags,
+			minArgs:    0,
+			usage:      "Usage: /mytags",
+			desc:       "Lists every tag you own (built-in and custom) with its id and name, and marks your active one. Use the id with /settag.",
+			reqPerms:   permissions.PermissionField["NONE"],
+			accountCmd: true,
+			category:   "chips",
+		},
 		"favourite": {
 			handler:    cmdFavourite,
 			minArgs:    1,

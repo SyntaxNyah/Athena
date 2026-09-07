@@ -808,6 +808,19 @@ func shopListOwned(client *Client) {
 				passives = append(passives, fmt.Sprintf("  %-28s — +%d chip/hr", it.name, it.hourlyBonus))
 				totalHourly += it.hourlyBonus
 			}
+			continue
+		}
+		// Not in the built-in catalog -- may be a staff-granted custom tag
+		// (/createtag, /grantcustomtag). Those live in CUSTOM_TAGS rather
+		// than the static shopItems list but share this same
+		// SHOP_PURCHASES ownership table, so an id that misses
+		// shopItemByID can still be a real tag the player owns.
+		if name, ok := db.GetCustomTag(id); ok {
+			active := ""
+			if id == activeTag {
+				active = " ← active"
+			}
+			tags = append(tags, fmt.Sprintf("  [%-18s] — %s%s", name, id, active))
 		}
 	}
 
@@ -836,6 +849,52 @@ func shopListOwned(client *Client) {
 			sb.WriteString(p + "\n")
 		}
 		sb.WriteString(fmt.Sprintf("  ⤷ Total: %d chips/hr (base 1 + %d bonus)\n", 1+totalHourly, totalHourly))
+	}
+	client.SendServerMessage(sb.String())
+}
+
+// cmdMyTags handles /mytags.
+//
+// A focused counterpart to /shop items: just the caller's own tags (built-in
+// and staff-granted custom alike), their ids, and which one is active --
+// without the job-pass/passive-income noise /shop items also lists. Meant
+// to answer "how many tags do I have, and what are their ids" directly, so
+// a player doesn't have to read past their passes to find one to hand to
+// /settag. lookupTag resolves both catalog and custom tags in one call, so
+// this can never drift from what /shop items considers a tag.
+func cmdMyTags(client *Client, _ []string, _ string) {
+	items, err := db.GetPlayerShopItems(client.Ipid())
+	if err != nil {
+		client.SendServerMessage("Failed to look up your tags: " + err.Error())
+		return
+	}
+
+	activeTag := db.GetActiveTag(client.Ipid())
+	var lines []string
+	for _, id := range items {
+		name, ok := lookupTag(id)
+		if !ok {
+			continue // a job pass or passive-income id -- not a tag
+		}
+		active := ""
+		if id == activeTag {
+			active = " ← active"
+		}
+		lines = append(lines, fmt.Sprintf("  [%-18s] — %s%s", name, id, active))
+	}
+
+	if len(lines) == 0 {
+		client.SendServerMessage("You don't own any tags yet. Browse /shop <category>, or ask staff about /listcustomtags.")
+		return
+	}
+
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("\n🏷️  Your Tags (%d owned):\n", len(lines)))
+	for _, l := range lines {
+		sb.WriteString(l + "\n")
+	}
+	if activeTag == "" {
+		sb.WriteString("  (no active tag — use /settag <id> to equip one)\n")
 	}
 	client.SendServerMessage(sb.String())
 }

@@ -127,6 +127,42 @@ func TestDeleteCustomTagUnknown(t *testing.T) {
 	}
 }
 
+// TestGetPlayerShopItemsIncludesCustomTags pins the fact /mytags and the
+// /shop items fix both depend on: a custom tag grant lands in the exact
+// same SHOP_PURCHASES ownership table as a built-in shop tag, so
+// GetPlayerShopItems returns both kinds of id side by side rather than
+// only the built-in ones.
+func TestGetPlayerShopItemsIncludesCustomTags(t *testing.T) {
+	teardown := setupTestDB(t)
+	defer teardown()
+
+	if err := CreateCustomTag("founder", "⭐ Founder", "admin"); err != nil {
+		t.Fatalf("CreateCustomTag failed: %v", err)
+	}
+	if err := GrantShopItem("ipid_z", "founder"); err != nil {
+		t.Fatalf("GrantShopItem (custom) failed: %v", err)
+	}
+	if err := GrantShopItem("ipid_z", "tag_gambler"); err != nil {
+		t.Fatalf("GrantShopItem (built-in) failed: %v", err)
+	}
+
+	items, err := GetPlayerShopItems("ipid_z")
+	if err != nil {
+		t.Fatalf("GetPlayerShopItems failed: %v", err)
+	}
+	want := map[string]bool{"founder": false, "tag_gambler": false}
+	for _, id := range items {
+		if _, ok := want[id]; ok {
+			want[id] = true
+		}
+	}
+	for id, found := range want {
+		if !found {
+			t.Errorf("GetPlayerShopItems did not include %q; got %v", id, items)
+		}
+	}
+}
+
 func TestGrantShopItemIdempotent(t *testing.T) {
 	teardown := setupTestDB(t)
 	defer teardown()
