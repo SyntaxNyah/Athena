@@ -16,7 +16,7 @@ For player-facing commands, see [`PLAYER_COMMANDS.md`](PLAYER_COMMANDS.md).
 | `MOVE_USERS` | Move/summon players between areas | /summon |
 | `MODIFY_AREA` | Override area settings | BG/music locks, force CMs |
 | `BAN_INFO` | View ban records | /getban, /listbans |
-| `ADMIN` | Server runtime configuration | /arealog, /reloadplaytime, /deletetag |
+| `ADMIN` | Server runtime configuration | /arealog, /reloadplaytime, /grantchips |
 | `SHADOW` | Stealth moderator | Hidden from /gas/players for non-admins |
 
 Permission bits are configured in `config/roles.toml`. Multiple bits are granted as a bitfield — see the role definitions for combinations.
@@ -265,9 +265,9 @@ The DB records the issuing tier of every punishment in `PUNISHMENTS.ISSUER_TIER`
 | Command | Permission | Description |
 |---------|-----------|-------------|
 | `/createtag <id> <display name>` | MUTE | Mint a new custom tag at runtime |
-| `/deletetag <id>` | ADMIN | Delete a custom tag and clean up grants/equips |
+| `/deletetag <id>` | MUTE | Delete a custom tag and clean up grants/equips |
 | `/grantcustomtag <username> <id>` | MUTE | Grant a tag to an account (account must have logged in once) |
-| `/revokecustomtag <username> <id>` | ADMIN | Revoke a granted tag |
+| `/revokecustomtag <username> <id>` | MUTE | Revoke a granted tag |
 | `/listcustomtags` | NONE | List every custom tag |
 
 ---

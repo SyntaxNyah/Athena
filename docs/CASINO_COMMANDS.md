@@ -445,7 +445,8 @@ Spend your chips on **permanent upgrades** that stay linked to your account fore
 |---------|-------------|
 | `/shop` | Browse the full shop catalog with prices and descriptions. |
 | `/shop buy <item_id>` | Purchase an item by its ID. |
-| `/shop items` | List all items you currently own. |
+| `/shop items` | List all items you currently own (tags, passes, and passive upgrades together). |
+| `/mytags` | List just the tags you own — built-in and staff-granted custom alike — with their ids and which one is active. |
 | `/settag <tag_id>` | Equip a purchased cosmetic tag visible in `/gas` and `/players`. |
 | `/settag none` | Remove your active cosmetic tag. |
 
