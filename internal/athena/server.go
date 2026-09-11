@@ -698,7 +698,7 @@ func acceptTCPConnection(conn net.Conn, rawIP, ipid string) {
 		conn.Close()
 		return
 	}
-	recordIPFirstSeen(ipid)
+	isNewIPID := recordIPFirstSeen(ipid)
 	// Persist the IP and update its last-seen timestamp for all connections
 	// (new and returning). The upsert keeps FIRST_SEEN intact for existing rows.
 	go func() {
@@ -707,6 +707,7 @@ func acceptTCPConnection(conn net.Conn, rawIP, ipid string) {
 		}
 	}()
 	client := NewClient(conn, ipid)
+	client.isNewIPID = isNewIPID
 	client.HandleClient()
 }
 
@@ -852,7 +853,7 @@ func HandleWS(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
-	recordIPFirstSeen(ipid)
+	isNewIPID := recordIPFirstSeen(ipid)
 	// Persist the IP and update its last-seen timestamp for all connections
 	// (new and returning). The upsert keeps FIRST_SEEN intact for existing rows.
 	go func(id string) {
@@ -866,6 +867,7 @@ func HandleWS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	client := NewClient(websocket.NetConn(context.TODO(), c, websocket.MessageText), ipid)
+	client.isNewIPID = isNewIPID
 	go client.HandleClient()
 }
 
@@ -1849,11 +1851,18 @@ func checkIPPingRateLimit(ipid string) bool {
 // When a genuinely new IPID is recorded, a timestamp is also pushed to globalNewIPTracker
 // for global new-connection rate limiting.
 // NOTE: the caller is responsible for persisting the IP to the database (db.MarkIPKnown).
-func recordIPFirstSeen(ipid string) {
+//
+// Returns true the one time an IPID is genuinely new -- never seen by this
+// server before, in the database or this session -- and false on every call
+// after that, including every reconnect. The join popup (joinpopup.go) is the
+// one caller that reads this return value; every other call site predates it
+// and just discards it, which remains correct since a no-op call has nothing
+// new to report.
+func recordIPFirstSeen(ipid string) bool {
 	ipFirstSeenTracker.mu.Lock()
 	if _, exists := ipFirstSeenTracker.times[ipid]; exists {
 		ipFirstSeenTracker.mu.Unlock()
-		return
+		return false
 	}
 	ipFirstSeenTracker.times[ipid] = time.Now()
 	ipFirstSeenTracker.mu.Unlock()
@@ -1872,6 +1881,7 @@ func recordIPFirstSeen(ipid string) {
 	if raidGuardActive.Load() {
 		raidObserveArrival(time.Now())
 	}
+	return true
 }
 
 // checkNewIPIDOOCCooldown checks whether a newly-seen IPID is still within the OOC chat cooldown.

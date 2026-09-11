@@ -1173,6 +1173,40 @@ captcha_plugin = ""
 # Default: 3000
 captcha_plugin_timeout = 3000
 
+# ─── Join Popup (first-time welcome message) ─────────────────────────────────
+#
+# Shows an operator-authored welcome message to any IPID connecting to this
+# server for the very first time ever -- via the same client-side popup (the
+# AO2 BB packet) the join captcha above uses, so it lands in an unmissable
+# dialog on desktop AO2 and a notice on WebAO. A copy is also sent to OOC so
+# it's still there after the popup is dismissed.
+#
+# "First time ever" is the same notion of new every new_ipid_* cooldown and
+# exemption above already agrees on: never seen in the server's database, not
+# merely unseen this session. A returning player is never shown it again,
+# server restart or not.
+#
+# Independent of join_captcha: this is not a gate, nothing is blocked, and a
+# genuinely new IPID can see the welcome popup, the captcha challenge, both,
+# or neither depending on how each is configured.
+# Default: false
+join_popup = false
+
+# The message shown. Use a triple-quoted string to list several lines -- rules,
+# a Discord invite, a website, whatever new players should see first. Links
+# are plain text (AO2 has no clickable-link support) but a player can select
+# and copy them.
+# Leave blank to disable the popup even when join_popup is true -- flipping
+# the toggle on without writing anything here is a silent no-op, not an empty
+# dialog.
+# Default: "" (nothing shown)
+join_popup_message = """
+Welcome to the server! Please read the rules before playing:
+https://example.com/rules
+
+Join our Discord: https://discord.gg/your-invite-here
+"""
+
 # ─── Community Voting ────────────────────────────────────────────────────────
 
 # Enable the community moderation vote system.

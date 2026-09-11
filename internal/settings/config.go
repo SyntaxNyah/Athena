@@ -156,15 +156,24 @@ type ServerConfig struct {
 	CaptchaPlugin                        string   `toml:"captcha_plugin"`
 	CaptchaPluginTimeout                 int      `toml:"captcha_plugin_timeout"`
 	JoinCaptchaPopup                     bool     `toml:"join_captcha_popup"`
-	EnableCommunityVote                  bool     `toml:"enable_community_vote"`
-	VoteThreshold                        int      `toml:"vote_threshold"`
-	VoteDuration                         int      `toml:"vote_duration"`
-	VoteActions                          []string `toml:"vote_actions"`
-	VoteMuteDuration                     int      `toml:"vote_mute_duration"`
-	TypingRacePhrases                    []string `toml:"typing_race_phrases"`
-	EnableNewspaper                      bool     `toml:"enable_newspaper"`
-	NewspaperInterval                    string   `toml:"newspaper_interval"`
-	NewspaperSections                    []string `toml:"newspaper_sections"`
+	// JoinPopup and JoinPopupMessage are the join popup (see joinpopup.go):
+	// an operator-authored welcome message -- rules, a Discord invite, a
+	// website -- shown once to any IPID connecting to this server for the
+	// very first time ever. Independent of the join captcha above, though it
+	// reuses the same client-side AO2 BB dialog to make it unmissable.
+	// JoinPopupMessage supports multiple lines (a triple-quoted TOML string);
+	// a blank message disables the feature even if JoinPopup is true.
+	JoinPopup           bool     `toml:"join_popup"`
+	JoinPopupMessage    string   `toml:"join_popup_message"`
+	EnableCommunityVote bool     `toml:"enable_community_vote"`
+	VoteThreshold       int      `toml:"vote_threshold"`
+	VoteDuration        int      `toml:"vote_duration"`
+	VoteActions         []string `toml:"vote_actions"`
+	VoteMuteDuration    int      `toml:"vote_mute_duration"`
+	TypingRacePhrases   []string `toml:"typing_race_phrases"`
+	EnableNewspaper     bool     `toml:"enable_newspaper"`
+	NewspaperInterval   string   `toml:"newspaper_interval"`
+	NewspaperSections   []string `toml:"newspaper_sections"`
 	// YouTubePlayPrefix, when non-empty and starting with "http", turns on the
 	// /play <youtube-link> integration. The prefix is the URL stem that
 	// clients fetch the downloaded MP3 from (e.g. "https://cdn.example.com/yt/").
@@ -395,6 +404,8 @@ func DefaultConfig() *Config {
 			CaptchaPlugin:                        "",
 			CaptchaPluginTimeout:                 3000,
 			JoinCaptchaPopup:                     true,
+			JoinPopup:                            false,
+			JoinPopupMessage:                     "",
 			EnableCommunityVote:                  false,
 			VoteThreshold:                        3,
 			VoteDuration:                         120,
