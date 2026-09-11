@@ -267,6 +267,8 @@ Key options beyond upstream defaults (`config/config.toml`):
 
 See `CLAUDE.md` for the full configuration reference.
 
+Setting up staff roles, or want to hand one player or moderator a single extra command (like `/ban`) without changing their role at all? See **[docs/PERMISSIONS_GUIDE.md](docs/PERMISSIONS_GUIDE.md)** — the full permission system reference, with copy-pasteable examples.
+
 ### WSS Setup
 
 **Via reverse proxy (recommended for Cloudflare):**
