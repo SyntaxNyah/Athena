@@ -1879,12 +1879,12 @@ func pktMA(client *Client, p *packet.Packet) {
 
 	isKick := durationMins == 0
 	if isKick {
-		if !permissions.HasPermission(client.Perms(), permissions.PermissionField["KICK"]) {
+		if !permissions.HasPermission(client.Perms(), permissions.PermissionField["KICK"]) && !clientHasCommandGrant(client, "kick") {
 			client.SendServerMessage("You do not have permission to kick.")
 			return
 		}
 	} else {
-		if !permissions.HasPermission(client.Perms(), permissions.PermissionField["BAN"]) {
+		if !permissions.HasPermission(client.Perms(), permissions.PermissionField["BAN"]) && !clientHasCommandGrant(client, "ban") {
 			client.SendServerMessage("You do not have permission to ban.")
 			return
 		}

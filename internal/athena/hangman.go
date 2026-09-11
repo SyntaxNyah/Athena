@@ -632,7 +632,8 @@ func hangmanStop(client *Client) {
 	isMod := permissions.IsModerator(client.Perms())
 	isCM := client.Area().HasCM(uid)
 	isHost := st.hostUID == uid
-	if !isMod && !isCM && !isHost {
+	isGranted := clientHasCommandGrant(client, "hangman")
+	if !isMod && !isCM && !isHost && !isGranted {
 		st.mu.Unlock()
 		client.SendServerMessage("Only the game host, CMs, or moderators can stop Hangman.")
 		return

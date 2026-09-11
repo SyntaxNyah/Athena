@@ -60,7 +60,7 @@ func cmdRaidGuard(client *Client, args []string, usage string) {
 		raidGuardAlertCmd(client, args[1:])
 		return
 	}
-	if !permissions.HasPermission(client.Perms(), permissions.PermissionField["BAN"]) {
+	if !permissions.HasPermission(client.Perms(), permissions.PermissionField["BAN"]) && !clientHasCommandGrant(client, "raidguard") {
 		client.SendServerMessage("You do not have permission to use that command.\nUsage: /raidguard alert <on|off>")
 		return
 	}

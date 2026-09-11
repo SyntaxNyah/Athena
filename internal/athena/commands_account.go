@@ -444,7 +444,7 @@ func cmdReloadPlaytime(client *Client, _ []string, _ string) {
 func cmdPlaytimeAdd(client *Client, args []string) {
 	const usage = "Usage: /playtime add <username> <duration>  (e.g. /playtime add alice 60h)"
 
-	if !permissions.HasPermission(client.Perms(), permissions.PermissionField["ADMIN"]) {
+	if !permissions.HasPermission(client.Perms(), permissions.PermissionField["ADMIN"]) && !clientHasCommandGrant(client, "playtime") {
 		client.SendServerMessage("You do not have permission to use that command.")
 		return
 	}
@@ -510,7 +510,7 @@ func cmdPlaytimeAdd(client *Client, args []string) {
 func cmdPlaytimeRemove(client *Client, args []string) {
 	const usage = "Usage: /playtime remove <username> <duration>  (e.g. /playtime remove alice 60h)"
 
-	if !permissions.HasPermission(client.Perms(), permissions.PermissionField["ADMIN"]) {
+	if !permissions.HasPermission(client.Perms(), permissions.PermissionField["ADMIN"]) && !clientHasCommandGrant(client, "playtime") {
 		client.SendServerMessage("You do not have permission to use that command.")
 		return
 	}
@@ -575,7 +575,7 @@ func cmdPlaytimeRemove(client *Client, args []string) {
 func cmdPlaytimeSet(client *Client, args []string) {
 	const usage = "Usage: /playtime set <username> <duration>  (e.g. /playtime set alice 1000h, /playtime set alice 3d12h30m)"
 
-	if !permissions.HasPermission(client.Perms(), permissions.PermissionField["ADMIN"]) {
+	if !permissions.HasPermission(client.Perms(), permissions.PermissionField["ADMIN"]) && !clientHasCommandGrant(client, "playtime") {
 		client.SendServerMessage("You do not have permission to use that command.")
 		return
 	}

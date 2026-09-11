@@ -29,7 +29,7 @@ import (
 func cmdPunishments(client *Client, args []string, usage string) {
 	target := client
 	if len(args) > 0 && strings.TrimSpace(args[0]) != "" {
-		if !permissions.HasPermission(client.Perms(), permissions.PermissionField["MUTE"]) {
+		if !permissions.HasPermission(client.Perms(), permissions.PermissionField["MUTE"]) && !clientHasCommandGrant(client, "punishments") {
 			client.SendServerMessage("Viewing another player's punishments requires moderator permissions. Use /punishments alone to view your own.")
 			return
 		}

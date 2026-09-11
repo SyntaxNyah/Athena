@@ -111,6 +111,13 @@ func cmdBg(client *Client, args []string, _ string) {
 	hasDJ := permissions.HasPermission(client.Perms(), permissions.PermissionField["DJ"])
 	isCM := client.HasCMPermission()
 	hasModifyArea := permissions.HasPermission(client.Perms(), permissions.PermissionField["MODIFY_AREA"])
+	// A console-granted "bg" account is treated as if it held MODIFY_AREA for
+	// this command: unrestricted, no cooldown, and it can override a locked
+	// background — the same tier /randombg's grant gets below.
+	hasGrant := clientHasCommandGrant(client, "bg")
+	if hasGrant {
+		hasModifyArea = true
+	}
 
 	// Must have at least DJ, area/server CM, or MODIFY_AREA permission.
 	if !hasDJ && !isCM && !hasModifyArea {
@@ -165,7 +172,7 @@ func cmdCharSelect(client *Client, args []string, _ string) {
 		client.ChangeCharacter(-1)
 		client.Send(&packet.DONE{})
 	} else {
-		if !client.HasCMPermission() {
+		if !client.HasCMPermission() && !clientHasCommandGrant(client, "charselect") {
 			client.SendServerMessage("You do not have permission to use that command.")
 			return
 		}
@@ -229,7 +236,8 @@ func cmdRandomBg(client *Client, _ []string, _ string) {
 		return
 	}
 	a := client.Area() // cache to avoid repeated mutex acquisitions
-	if a.LockBG() && !permissions.HasPermission(client.Perms(), permissions.PermissionField["MODIFY_AREA"]) {
+	if a.LockBG() && !permissions.HasPermission(client.Perms(), permissions.PermissionField["MODIFY_AREA"]) &&
+		!clientHasCommandGrant(client, "randombg") {
 		client.SendServerMessage("You do not have permission to change the background in this area.")
 		return
 	}
@@ -371,10 +379,11 @@ func cmdForcePos(client *Client, args []string, _ string) {
 // Handles /cm
 
 func cmdCM(client *Client, args []string, _ string) {
+	cmGranted := clientHasCommandGrant(client, "cm")
 	if client.CharID() == -1 {
 		client.SendServerMessage("You are spectating; you cannot become a CM.")
 		return
-	} else if !client.Area().CMsAllowed() && !client.HasCMPermission() {
+	} else if !client.Area().CMsAllowed() && !client.HasCMPermission() && !cmGranted {
 		client.SendServerMessage("You do not have permission to use that command.")
 		return
 	}
@@ -383,7 +392,7 @@ func cmdCM(client *Client, args []string, _ string) {
 		if client.Area().HasCM(client.Uid()) {
 			client.SendServerMessage("You are already a CM in this area.")
 			return
-		} else if len(client.Area().CMs()) > 0 && !permissions.HasPermission(client.Perms(), permissions.PermissionField["CM"]) {
+		} else if len(client.Area().CMs()) > 0 && !permissions.HasPermission(client.Perms(), permissions.PermissionField["CM"]) && !cmGranted {
 			client.SendServerMessage("This area already has a CM.")
 			return
 		}
@@ -391,7 +400,7 @@ func cmdCM(client *Client, args []string, _ string) {
 		client.SendServerMessage("Successfully became a CM.")
 		addToBuffer(client, "CMD", "CMed self.", false)
 	} else {
-		if !client.HasCMPermission() {
+		if !client.HasCMPermission() && !cmGranted {
 			client.SendServerMessage("You do not have permission to use that command.")
 			return
 		}
@@ -429,7 +438,7 @@ func cmdDoc(client *Client, args []string, _ string) {
 		client.SendServerMessage(client.Area().Doc())
 		return
 	} else {
-		if !client.HasCMPermission() {
+		if !client.HasCMPermission() && !clientHasCommandGrant(client, "doc") {
 			client.SendServerMessage("You do not have permission to change the doc.")
 			return
 		} else if *clear {
@@ -453,7 +462,7 @@ func cmdSetEviMod(client *Client, args []string, _ string) {
 	}
 	switch args[0] {
 	case "mods":
-		if !permissions.HasPermission(client.Perms(), permissions.PermissionField["MOD_EVI"]) {
+		if !permissions.HasPermission(client.Perms(), permissions.PermissionField["MOD_EVI"]) && !clientHasCommandGrant(client, "evimode") {
 			client.SendServerMessage("You do not have permission for this evidence mode.")
 			return
 		}
@@ -780,7 +789,7 @@ func cmdMove(client *Client, args []string, usage string) {
 	wantedArea := areas[areaID]
 
 	if len(*uids) > 0 {
-		if !permissions.HasPermission(client.Perms(), permissions.PermissionField["MOVE_USERS"]) {
+		if !permissions.HasPermission(client.Perms(), permissions.PermissionField["MOVE_USERS"]) && !clientHasCommandGrant(client, "move") {
 			client.SendServerMessage("You do not have permission to use that command.")
 			return
 		}
@@ -1035,7 +1044,7 @@ func cmdSwapEvi(client *Client, args []string, _ string) {
 // Handles /testify
 
 func cmdTestify(client *Client, _ []string, _ string) {
-	if !client.HasCMPermission() {
+	if !client.HasCMPermission() && !clientHasCommandGrant(client, "testify") {
 		client.SendServerMessage("You do not have permission to use that command.")
 		return
 	}
@@ -1051,7 +1060,7 @@ func cmdTestify(client *Client, _ []string, _ string) {
 // Handles /pause (stops testimony recording)
 
 func cmdPause(client *Client, _ []string, _ string) {
-	if !client.HasCMPermission() {
+	if !client.HasCMPermission() && !clientHasCommandGrant(client, "pause") {
 		client.SendServerMessage("You do not have permission to use that command.")
 		return
 	}
@@ -1077,7 +1086,7 @@ func cmdExamine(client *Client, _ []string, _ string) {
 // Handles /update
 
 func cmdUpdate(client *Client, _ []string, _ string) {
-	if !client.HasCMPermission() {
+	if !client.HasCMPermission() && !clientHasCommandGrant(client, "update") {
 		client.SendServerMessage("You do not have permission to use that command.")
 		return
 	}
@@ -1092,7 +1101,7 @@ func cmdUpdate(client *Client, _ []string, _ string) {
 // Handles /add
 
 func cmdAdd(client *Client, _ []string, _ string) {
-	if !client.HasCMPermission() {
+	if !client.HasCMPermission() && !clientHasCommandGrant(client, "add") {
 		client.SendServerMessage("You do not have permission to use that command.")
 		return
 	}
@@ -1107,7 +1116,7 @@ func cmdAdd(client *Client, _ []string, _ string) {
 // Handles /delete
 
 func cmdDelete(client *Client, _ []string, _ string) {
-	if !client.HasCMPermission() {
+	if !client.HasCMPermission() && !clientHasCommandGrant(client, "delete") {
 		client.SendServerMessage("You do not have permission to use that command.")
 		return
 	}
@@ -1135,7 +1144,7 @@ func cmdTestimony(client *Client, args []string, _ string) {
 		}
 		client.SendServerMessage(strings.Join(client.area.Testimony(), "\n"))
 		return
-	} else if !client.HasCMPermission() {
+	} else if !client.HasCMPermission() && !clientHasCommandGrant(client, "testimony") {
 		client.SendServerMessage("You do not have permission to use that command.")
 		return
 	}
@@ -1428,7 +1437,8 @@ func cmdAreaDesc(client *Client, args []string, _ string) {
 	}
 
 	if !permissions.HasPermission(client.Perms(), permissions.PermissionField["DJ"]) &&
-		!permissions.HasPermission(client.Perms(), permissions.PermissionField["MODIFY_AREA"]) {
+		!permissions.HasPermission(client.Perms(), permissions.PermissionField["MODIFY_AREA"]) &&
+		!clientHasCommandGrant(client, "areadesc") {
 		client.SendServerMessage("You do not have permission to change the area description.")
 		return
 	}

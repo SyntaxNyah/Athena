@@ -309,6 +309,15 @@ func NewServer(conf *settings.Config) (*Server, error) {
 		}
 	}
 
+	// Account command grants: load console-issued grants (grantcmd) so the
+	// in-memory cache the dispatch hot path reads is populated before the
+	// first connection can send a command. A failure here is non-fatal --
+	// it just means grants aren't checked until "reload" or the next
+	// grantcmd/revokecmd is run, which itself always reloads the cache.
+	if err := loadCommandGrants(); err != nil {
+		logger.LogErrorf("Failed to load account command grants from database: %v", err)
+	}
+
 	// Join captcha: load stored verifications, the operator question file and
 	// the captcha plugin (each is a no-op when the feature is unconfigured).
 	seedJoinCaptchaVerified()
@@ -461,12 +470,19 @@ func NewServer(conf *settings.Config) (*Server, error) {
 	}
 
 	// Initialize area logging if enabled.
+	//
+	// Directories are created from each area's configured (DefaultName), not
+	// its current display name, because that is also what every log write
+	// keys on -- see the matching WriteAreaLog call below. At startup the two
+	// are always identical anyway (no rename has happened yet), but naming it
+	// DefaultName here documents that a later /area rename must never cause
+	// this to run again for a second, renamed directory.
 	logger.EnableAreaLogging = conf.EnableAreaLogging
 	if logger.EnableAreaLogging {
 		logger.LogInfo("Area logging is enabled. Creating area log directories...")
 		for _, a := range s.areas {
-			if err := logger.CreateAreaLogDirectory(a.Name()); err != nil {
-				logger.LogErrorf("Failed to create area log directory for %v: %v", a.Name(), err)
+			if err := logger.CreateAreaLogDirectory(a.DefaultName()); err != nil {
+				logger.LogErrorf("Failed to create area log directory for %v: %v", a.DefaultName(), err)
 			}
 		}
 	}
@@ -1048,7 +1064,14 @@ func addToBuffer(client *Client, action string, message string, audit bool) {
 		b.WriteString(snap.oocName)
 		b.WriteString(" | ")
 		b.WriteString(message)
-		logger.WriteAreaLog(snap.area.Name(), b.String())
+		// Keyed by the area's configured name (areas.toml), not its current
+		// display name -- a live /area rename must never fork the log into a
+		// second directory. "Teto Cafe" renamed to "Miku Cafe" keeps writing
+		// into Teto Cafe/Teto Cafe-<date>.txt the whole time it's renamed; the
+		// rename itself is still visible in-line as a CMD log entry (see
+		// cmdAreaRename), so nothing about the change is lost, it just never
+		// gets its own folder.
+		logger.WriteAreaLog(snap.area.DefaultName(), b.String())
 	}
 
 	logBufPool.Put(b)

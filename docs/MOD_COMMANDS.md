@@ -21,6 +21,8 @@ For player-facing commands, see [`PLAYER_COMMANDS.md`](PLAYER_COMMANDS.md).
 
 Permission bits are configured in `config/roles.toml`. Multiple bits are granted as a bitfield — see the role definitions for combinations.
 
+Need to hand one account a single command without changing its role or bitfield at all — e.g. one specific command for one player, or one extra admin command for a moderator who shouldn't have full `ADMIN`? See **[Account Command Grants](#account-command-grants-grantcmd)** under the server console section below — it's a separate, console-only mechanism from the role system in this table.
+
 ---
 
 ## Account Management (Mod CLI / `/login`)
@@ -331,8 +333,35 @@ Reachable only with shell access to the host, which is a different and stronger 
 | `punishment <enable\|disable\|status>` | Global kill switch for the punishment system. Console-only by design: no in-game or Discord command can reach it. |
 | `torment <ipid>` | Add an IPID to the torment list by hand. The only remaining manual route — `/lag` was removed from the game. |
 | `untorment <ipid\|all>` | The console half of `/untorment` |
+| `grantcmd <username> <command1>[,<command2>,...]` | Let one account run one or more specific in-game commands, regardless of its role. See **Account Command Grants** below. |
+| `revokecmd <username> <command1>[,...]\|all` | Revoke specific command grants, or every grant on the account with `all` |
+| `grants [username]` | List every command grant on the server, or just one account's |
 
 There is no longer a `grant` verb: the four commands it armed have been removed (see [Removed: possession and stealth-disconnect](#removed-possession-and-stealth-disconnect)).
+
+### Account Command Grants (`grantcmd`)
+
+> **Full guide with worked examples:** [`docs/PERMISSIONS_GUIDE.md`](PERMISSIONS_GUIDE.md). The summary below covers the console syntax; the guide walks through real scenarios (granting a single command to a plain player, giving a moderator one missing admin command, event-scoped grants, auditing, troubleshooting).
+
+This is the tool for "I want this one account to be able to run `/ban`, but I don't want to make them a full moderator" — or the reverse, "this moderator is missing one admin command, but I don't want to hand them all of `ADMIN`." It sits **alongside** the role system in `roles.toml`, not instead of it: a grant only ever *adds* one specific command to one specific account, it never changes their role, and it never shows up as extra permission bits anywhere (`/gas`, `/players`, `IsModerator`/`IsAdmin` checks, shadow-mod labelling — all completely unaffected). A granted account is still whatever it was before, plus one command.
+
+**Why this is console-only.** Handing out access to *any* command in the entire server to *any* account is a broad power, on the same level as the things the old `grant` verb used to gate — so like everything else at that level, it is reachable only with shell access to the host, never from in-game, no matter how high a moderator's permissions are.
+
+```
+grantcmd alice ban              # alice can now run /ban, and only /ban — nothing else changes
+grantcmd bob purgedb,terminal   # bob (an existing mod without ADMIN) can now also run these two admin commands
+revokecmd alice ban             # take it back
+revokecmd bob all               # wipe every grant bob has
+grants                          # see every account that currently holds a grant
+grants alice                    # see just alice's
+```
+
+Notes:
+- **Usernames are case-sensitive** — they have to match the account's login exactly (same as `/login` and `/resetusername`). `grantcmd` checks the account actually exists first, so a typo fails with an error instead of silently granting nothing to nobody.
+- **Command names are whatever the player types after the `/`** — e.g. `ban`, not `/ban`. An unknown command name is rejected at grant time.
+- It works on **both** player accounts (`/register`) and moderator accounts (`/mkusr`) — the same mechanism covers "give a regular player one moderation command" and "give an existing moderator one extra admin command" equally.
+- If a player renames their account with `/resetusername`, any grants they hold move with them to the new name automatically.
+- Takes effect immediately — no restart, no `/reload` needed. `grants`/`grants <username>` always reflects the live state.
 
 ---
 

@@ -150,7 +150,7 @@ func renderPunishmentHelp(client *Client, casinoEnabled, accountsEnabled, voiceE
 		if cmd.voiceCmd && !voiceEnabled {
 			continue
 		}
-		if !clientCanUseCommand(client, cmd) {
+		if !clientCanUseCommand(client, name, cmd) {
 			continue
 		}
 		available[name] = cmd

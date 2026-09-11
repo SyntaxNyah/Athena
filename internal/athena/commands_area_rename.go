@@ -129,14 +129,12 @@ func cmdAreaRename(client *Client, args []string, usage string) {
 	republishAreaNames()
 	areaRenameMu.Unlock()
 
-	// Area logs are written into a per-name directory created at startup, so a
-	// name that has never existed before needs one. A failure is logged and not
-	// fatal: WriteAreaLog opens with O_CREATE and simply drops the line if the
-	// directory is missing, exactly as it would for an area added to the config
-	// without a restart.
-	if err := logger.CreateAreaLogDirectory(name); err != nil {
-		logger.LogErrorf("Failed to create area log directory for renamed area %q: %v", name, err)
-	}
+	// Area logs are keyed by the area's configured name (DefaultName), not its
+	// current display name (see WriteAreaLog's call site in server.go), so a
+	// rename never needs a new log directory -- it keeps writing into the one
+	// created at startup. "Teto Cafe" renamed to "Miku Cafe" logs into
+	// Teto Cafe/Teto Cafe-<date>.txt the whole time it's renamed; the rename
+	// itself still shows up in that file as a CMD entry a few lines down.
 
 	sendAreaServerMessage(a, fmt.Sprintf("📛 %v renamed this area to %q (it was %q).", oocDisplayName(client), name, old))
 	client.SendServerMessage(fmt.Sprintf("Renamed the area to %q. It reverts to %q when the room empties or its last CM leaves — or run /area unrename.",

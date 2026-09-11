@@ -371,7 +371,7 @@ func cvoteAccept(client *Client, args []string) {
 		return
 	}
 
-	if !client.Authenticated() || !permissions.IsModerator(client.Perms()) {
+	if !client.Authenticated() || (!permissions.IsModerator(client.Perms()) && !clientHasCommandGrant(client, "cvote")) {
 		client.SendServerMessage("Only moderators can accept community votes.")
 		return
 	}
@@ -420,7 +420,7 @@ func cvoteAccept(client *Client, args []string) {
 	case cvoteActionAreaKick:
 		requiredPerm = permissions.PermissionField["KICK"]
 	}
-	if !permissions.HasPermission(client.Perms(), requiredPerm) {
+	if !permissions.HasPermission(client.Perms(), requiredPerm) && !clientHasCommandGrant(client, "cvote") {
 		communityVotes.mu.Unlock()
 		client.SendServerMessage(fmt.Sprintf(
 			"You do not have permission to %s players.", entry.action))
@@ -596,7 +596,7 @@ func cvoteReject(client *Client, args []string) {
 		return
 	}
 
-	if !client.Authenticated() || !permissions.IsModerator(client.Perms()) {
+	if !client.Authenticated() || (!permissions.IsModerator(client.Perms()) && !clientHasCommandGrant(client, "cvote")) {
 		client.SendServerMessage("Only moderators can reject community votes.")
 		return
 	}
@@ -653,7 +653,7 @@ func cvoteCancel(client *Client, args []string) {
 		return
 	}
 
-	if !client.Authenticated() || !permissions.IsModerator(client.Perms()) {
+	if !client.Authenticated() || (!permissions.IsModerator(client.Perms()) && !clientHasCommandGrant(client, "cvote")) {
 		client.SendServerMessage("Only moderators can cancel community votes.")
 		return
 	}
