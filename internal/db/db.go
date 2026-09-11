@@ -369,6 +369,16 @@ func Open() error {
 	if err != nil {
 		return err
 	}
+	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS ACCOUNT_COMMAND_GRANTS(
+		USERNAME   TEXT    NOT NULL,
+		COMMAND    TEXT    NOT NULL,
+		GRANTED_BY TEXT    NOT NULL DEFAULT '',
+		GRANTED_AT INTEGER NOT NULL DEFAULT 0,
+		PRIMARY KEY (USERNAME, COMMAND)
+	)`)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -789,6 +799,26 @@ func upgradeDB(v int) error {
 		if _, err := db.Exec("PRAGMA user_version = 26"); err != nil {
 			return err
 		}
+		fallthrough
+	case 26:
+		// ACCOUNT_COMMAND_GRANTS backs the console-only grantcmd/revokecmd
+		// commands: each row lets one account use one specific command
+		// regardless of its role/permission bitfield, so an operator with
+		// shell access can hand a player "/ban" without making them a full
+		// moderator. Fresh databases get the table from the CREATE TABLE in
+		// Open(); this migration is a no-op-safe CREATE for upgrades.
+		if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS ACCOUNT_COMMAND_GRANTS(
+			USERNAME   TEXT    NOT NULL,
+			COMMAND    TEXT    NOT NULL,
+			GRANTED_BY TEXT    NOT NULL DEFAULT '',
+			GRANTED_AT INTEGER NOT NULL DEFAULT 0,
+			PRIMARY KEY (USERNAME, COMMAND)
+		)`); err != nil {
+			return err
+		}
+		if _, err := db.Exec("PRAGMA user_version = 27"); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -987,6 +1017,16 @@ func RenameAccount(oldName, newName string) error {
 	}
 
 	if _, err := tx.Exec("UPDATE USERS SET USERNAME = ?, USERNAME_RESETS = USERNAME_RESETS + 1 WHERE USERNAME = ?", newName, oldName); err != nil {
+		return err
+	}
+	// Carry any console-granted command access along with the account —
+	// otherwise a /resetusername would silently drop staff-issued command
+	// grants with no error to either the player or the operator who granted
+	// them. ACCOUNT_COMMAND_GRANTS is keyed (USERNAME, COMMAND); if the new
+	// name already holds an identical grant (only possible if it was granted
+	// separately under that name before), keep that row and drop the old
+	// one rather than violating the primary key.
+	if _, err := tx.Exec(`UPDATE OR REPLACE ACCOUNT_COMMAND_GRANTS SET USERNAME = ? WHERE USERNAME = ?`, newName, oldName); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -3055,6 +3095,109 @@ func LoadJoinCaptchaVerified() ([]string, error) {
 			return nil, err
 		}
 		out = append(out, ipid)
+	}
+	return out, rows.Err()
+}
+
+// CommandGrantInfo is one row of ACCOUNT_COMMAND_GRANTS: a single command an
+// operator with server-console access has explicitly granted to one account,
+// independent of that account's role/permission bitfield. Command is always
+// stored lowercase (matching the athena.Commands registry key); Username is
+// stored exactly as given, matching the case-sensitive USERS primary key.
+type CommandGrantInfo struct {
+	Username  string
+	Command   string
+	GrantedBy string
+	GrantedAt int64
+}
+
+// AddCommandGrant upserts a console-issued command grant for username.
+// Re-granting an already-granted command overwrites the issuer/timestamp
+// rather than creating a duplicate row.
+func AddCommandGrant(username, command, grantedBy string, grantedAt int64) error {
+	if db == nil {
+		return nil
+	}
+	_, err := db.Exec("INSERT OR REPLACE INTO ACCOUNT_COMMAND_GRANTS(USERNAME, COMMAND, GRANTED_BY, GRANTED_AT) VALUES(?, ?, ?, ?)",
+		username, command, grantedBy, grantedAt)
+	return err
+}
+
+// RemoveCommandGrant deletes one command grant. Returns sql.ErrNoRows if no
+// such grant existed so callers can distinguish "revoked a real grant" from
+// "there was nothing to revoke".
+func RemoveCommandGrant(username, command string) error {
+	if db == nil {
+		return nil
+	}
+	res, err := db.Exec("DELETE FROM ACCOUNT_COMMAND_GRANTS WHERE USERNAME = ? AND COMMAND = ?", username, command)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
+// RemoveAllCommandGrants deletes every command grant held by username,
+// returning how many were removed. Used by "revokecmd <username> all".
+func RemoveAllCommandGrants(username string) (int64, error) {
+	if db == nil {
+		return 0, nil
+	}
+	res, err := db.Exec("DELETE FROM ACCOUNT_COMMAND_GRANTS WHERE USERNAME = ?", username)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}
+
+// ListCommandGrants returns every command granted to one account, oldest
+// first. Used by the console "grants <username>" listing.
+func ListCommandGrants(username string) ([]CommandGrantInfo, error) {
+	if db == nil {
+		return nil, nil
+	}
+	rows, err := db.Query("SELECT USERNAME, COMMAND, GRANTED_BY, GRANTED_AT FROM ACCOUNT_COMMAND_GRANTS WHERE USERNAME = ? ORDER BY GRANTED_AT ASC", username)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []CommandGrantInfo
+	for rows.Next() {
+		var g CommandGrantInfo
+		if err := rows.Scan(&g.Username, &g.Command, &g.GrantedBy, &g.GrantedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, g)
+	}
+	return out, rows.Err()
+}
+
+// ListAllCommandGrants returns every command grant on the server. Used to
+// seed the in-memory grant cache at startup (see athena.loadCommandGrants)
+// and by the console "grants" listing with no username.
+func ListAllCommandGrants() ([]CommandGrantInfo, error) {
+	if db == nil {
+		return nil, nil
+	}
+	rows, err := db.Query("SELECT USERNAME, COMMAND, GRANTED_BY, GRANTED_AT FROM ACCOUNT_COMMAND_GRANTS ORDER BY USERNAME ASC, GRANTED_AT ASC")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []CommandGrantInfo
+	for rows.Next() {
+		var g CommandGrantInfo
+		if err := rows.Scan(&g.Username, &g.Command, &g.GrantedBy, &g.GrantedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, g)
 	}
 	return out, rows.Err()
 }

@@ -374,7 +374,7 @@ func cmdRoulette(client *Client, args []string, usage string) {
 		rrJoin(client)
 		return
 	}
-	if !permissions.HasPermission(client.Perms(), permissions.PermissionField["MUTE"]) {
+	if !permissions.HasPermission(client.Perms(), permissions.PermissionField["MUTE"]) && !clientHasCommandGrant(client, "roulette") {
 		client.SendServerMessage("You do not have permission to use that command.")
 		return
 	}

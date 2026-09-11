@@ -99,6 +99,9 @@ func isMafiaCM(client *Client, g *MafiaGame) bool {
 	if len(g.Players) > 0 && g.Players[0].Client == client {
 		return true
 	}
+	if clientHasCommandGrant(client, "mafia") {
+		return true
+	}
 	return false
 }
 

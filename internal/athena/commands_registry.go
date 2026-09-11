@@ -3414,12 +3414,22 @@ var helpCategoryList = []helpCategory{
 	{"admin", "⚙️", "Admin", "Server configuration, user management, runtime tweaks."},
 }
 
-// clientCanUseCommand reports whether the client has permission to use cmd,
-// factoring in the special CM check.
-func clientCanUseCommand(client *Client, cmd Command) bool {
+// clientCanUseCommand reports whether the client has permission to use the
+// command named name, factoring in the special CM check and any console-
+// issued per-account command grant (see command_grants.go) for name.
+//
+// The grant check is the one place in the entire command surface that has to
+// know about every registered command, and it gets that for free: name is
+// exactly the Commands map key ParseCommand dispatched on, so a grant of any
+// command in the registry is checked here regardless of what permission tier
+// that command normally requires -- this is the single chokepoint every
+// slash command passes through, both for actually running the command
+// (ParseCommand) and for whether /help advertises it.
+func clientCanUseCommand(client *Client, name string, cmd Command) bool {
 	return permissions.HasPermission(client.Perms(), cmd.reqPerms) ||
 		(cmd.reqPerms == permissions.PermissionField["CM"] && client.Area().HasCM(client.Uid())) ||
-		(cmd.reqPerms == permissions.PermissionField["DJ"] && client.HasCMPermission())
+		(cmd.reqPerms == permissions.PermissionField["DJ"] && client.HasCMPermission()) ||
+		clientHasCommandGrant(client, name)
 }
 
 // ParseCommand calls the appropriate function for a given command.
@@ -3460,7 +3470,7 @@ func ParseCommand(client *Client, command string, args []string) {
 						if cmd.voiceCmd && !voiceEnabledNow {
 							continue
 						}
-						if clientCanUseCommand(client, cmd) || cmd.publicHelp {
+						if clientCanUseCommand(client, name, cmd) || cmd.publicHelp {
 							lines = append(lines, fmt.Sprintf("  /%v — %v", name, cmd.desc))
 						}
 					}
@@ -3478,7 +3488,7 @@ func ParseCommand(client *Client, command string, args []string) {
 			// Not a category — try to look up as a specific command
 			cmd, exists := Commands[cmdName]
 			if exists && !(cmd.casinoCmd && !casinoEnabled) && !(cmd.accountCmd && !accountsEnabled) && !(cmd.voiceCmd && !voiceEnabledNow) {
-				if clientCanUseCommand(client, cmd) || cmd.publicHelp {
+				if clientCanUseCommand(client, cmdName, cmd) || cmd.publicHelp {
 					client.SendServerMessage(cmd.usage)
 				} else {
 					client.SendServerMessage("You do not have permission to use that command.")
@@ -3517,7 +3527,7 @@ func ParseCommand(client *Client, command string, args []string) {
 		var catLines []string
 		for _, cat := range helpCategoryList {
 			hasAny := false
-			for _, cmd := range Commands {
+			for name, cmd := range Commands {
 				if cmd.category != cat.name {
 					continue
 				}
@@ -3530,7 +3540,7 @@ func ParseCommand(client *Client, command string, args []string) {
 				if cmd.voiceCmd && !voiceEnabledNow {
 					continue
 				}
-				if clientCanUseCommand(client, cmd) || cmd.publicHelp {
+				if clientCanUseCommand(client, name, cmd) || cmd.publicHelp {
 					hasAny = true
 					break
 				}
@@ -3564,7 +3574,7 @@ func ParseCommand(client *Client, command string, args []string) {
 		client.SendServerMessage("Voice chat is not enabled on this server.  Set enable_voice = true in [Voice] to use voice commands.")
 		return
 	}
-	if clientCanUseCommand(client, cmd) {
+	if clientCanUseCommand(client, command, cmd) {
 		// Show usage when the user passes -h, UNLESS the command's own
 		// usage string documents [-h] as a supported flag (punishment
 		// commands use -h for "hidden" — suppress the per-target
